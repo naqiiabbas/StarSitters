@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import {
   Search,
   Filter,
@@ -203,10 +204,13 @@ export default function CoursesPage() {
             Manage training courses and certifications for babysitters
           </p>
         </div>
-        <button className="inline-flex items-center gap-2 px-5 h-[44px] bg-[#b8e0f0] hover:bg-[#c8e8f5] text-[#0a0f24] text-[14px] font-semibold rounded-[10px] transition-all">
+        <Link
+          href="/courses/create"
+          className="inline-flex items-center gap-2 px-5 h-[44px] bg-[#b8e0f0] hover:bg-[#c8e8f5] text-[#0a0f24] text-[14px] font-semibold rounded-[10px] transition-all"
+        >
           <Plus className="w-4 h-4" strokeWidth={2.5} />
           Create New Course
-        </button>
+        </Link>
       </div>
 
       {/* Stat cards */}
