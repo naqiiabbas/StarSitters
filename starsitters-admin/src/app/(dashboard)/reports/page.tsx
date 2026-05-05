@@ -176,7 +176,7 @@ export default function ReportsPage() {
                 <Tooltip
                   contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 10, fontSize: 13 }}
                   itemStyle={{ color: "#cbd5e1" }}
-                  formatter={(v: number) => `$${v.toLocaleString()}`}
+                  formatter={(v) => `$${Number(v).toLocaleString()}`}
                 />
               </PieChart>
             </ResponsiveContainer>

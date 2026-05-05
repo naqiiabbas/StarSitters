@@ -337,7 +337,7 @@ export default function DashboardPage() {
                   }}
                   labelStyle={{ color: "#fff" }}
                   itemStyle={{ color: "#cbd5e1" }}
-                  formatter={(v: number) => [`$${v.toLocaleString()}`, "Revenue"]}
+                  formatter={(v) => [`$${Number(v).toLocaleString()}`, "Revenue"]}
                 />
                 <Bar dataKey="revenue" fill="#86efac" radius={[6, 6, 0, 0]} />
               </BarChart>
