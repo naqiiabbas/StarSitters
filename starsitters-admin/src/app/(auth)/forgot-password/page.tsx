@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Mail, MoveLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Mail, CheckCircle2, Loader2 } from "lucide-react";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -13,7 +13,6 @@ export default function ForgotPasswordPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate reset link sending
     setTimeout(() => {
       setIsLoading(false);
       setIsSubmitted(true);
@@ -21,142 +20,170 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#0A0A0F] flex flex-col items-center justify-center p-6 antialiased">
-      {/* Back to Sign In (Shown in both states) */}
-      {/* Back to Sign In (Shown in both states) */}
-      <div className="w-[520px] mb-8">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-[#a1a1aa] hover:text-white transition-colors text-sm font-medium group"
-        >
-          <MoveLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
-          Back to Sign In
-        </Link>
+    <main className="relative min-h-screen flex flex-col items-center justify-center px-6 py-12 antialiased overflow-hidden">
+      {/* Background image */}
+      <div className="absolute inset-0 -z-10">
+        <Image
+          src="/login-bg.png"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(0deg, rgba(30, 41, 59, 0.3), rgba(30, 41, 59, 0.3)), linear-gradient(180deg, rgba(15, 23, 42, 0.35) 0%, rgba(15, 23, 42, 0.7) 100%)",
+          }}
+        />
       </div>
 
-      {/* Logo Section */}
-      <div className="flex flex-col items-center mb-12 text-center">
-        <div className="relative w-[124px] h-[78px] mb-8 transition-transform duration-500 hover:scale-105">
+      {/* Centered column */}
+      <div className="w-full max-w-[480px] flex flex-col items-center">
+        {/* Back to Sign In — only on form state */}
+        {!isSubmitted && (
+          <div className="w-full mb-6">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 text-[14px] text-[#94a3b8] hover:text-white transition-colors group"
+            >
+              <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+              Back to Sign In
+            </Link>
+          </div>
+        )}
+
+        {/* Logo */}
+        <div className="relative w-[88px] h-[88px] mb-8 rounded-full overflow-hidden">
           <Image
-            src="/logo.png"
-            alt="OnlyGigz Logo"
+            src="/star-sitters-logo.png"
+            alt="Star Sitters"
             fill
-            sizes="124px"
-            className="object-contain"
+            sizes="88px"
+            className="object-cover"
             priority
           />
         </div>
 
-        {!isSubmitted ? (
-          <>
-            <h1 className="text-heading leading-heading font-bold text-white mb-3">
-              Forgot Password?
-            </h1>
-            <p className="text-body leading-body font-normal text-[#a1a1aa]">
-              No worries, we&apos;ll send you reset instructions
-            </p>
-          </>
-        ) : (
-          <>
-            <h1 className="text-heading leading-heading font-bold text-white mb-3 text-[32px]">
-              Check Your Email
-            </h1>
-            <p className="text-body leading-body font-normal text-[#a1a1aa]">
-              We&apos;ve sent a password reset link to
-              <br />
-              <span className="text-primary-accent font-medium mt-1 inline-block">{email}</span>
-            </p>
-          </>
-        )}
-      </div>
-
-      {/* Card */}
-      <div className="w-[520px] bg-[#18181b] border border-[#27272a] border-[1.09px] rounded-[8px] p-[32px] shadow-2xl relative overflow-hidden group">
-        {!isSubmitted ? (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-[24px] relative z-10">
-            {/* Email Field */}
-            <div className="space-y-3">
-              <label className="text-label leading-label font-medium text-[#a1a1aa] block px-1">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#a1a1aa] transition-colors group-focus-within:text-primary-accent" />
-                <input
-                  required
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@gighub.com"
-                  className="w-full h-[50px] bg-[#1a1a1e] border border-[#27272a] rounded-[8px] pl-12 pr-4 text-body leading-none font-normal text-white focus:outline-none focus:border-primary-accent/40 focus:ring-4 focus:ring-primary-accent/5 transition-all placeholder:text-[#a1a1aa]/30"
-                />
+        {/* Card */}
+        <div className="w-full bg-[#1e293b]/60 backdrop-blur-md border border-[#334155]/60 rounded-2xl px-8 py-10 sm:px-10 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.6)]">
+          {!isSubmitted ? (
+            <>
+              {/* Mail icon circle */}
+              <div className="flex justify-center mb-5">
+                <div className="w-12 h-12 rounded-full bg-[#475569]/40 border border-[#475569]/40 flex items-center justify-center">
+                  <Mail className="w-5 h-5 text-[#cbd5e1]" />
+                </div>
               </div>
-              <p className="text-[13px] font-normal text-[#a1a1aa]/60 px-1 leading-relaxed">
-                Enter the email address associated with your account
-              </p>
-            </div>
 
-            {/* Action Button */}
-            <button
-              disabled={isLoading}
-              className="w-full h-[50px] bg-primary-accent text-black text-body leading-body font-semibold rounded-[8px] hover:brightness-105 active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2 shadow-[0_4px_12px_-4px_rgba(179,255,0,0.3)] disabled:opacity-70 disabled:cursor-not-allowed group/btn"
-            >
-              {isLoading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                "Send Reset Link"
-              )}
-            </button>
-          </form>
-        ) : (
-          <div className="flex flex-col gap-[24px] relative z-10 text-center">
-            {/* Mail Icon Circle */}
-            <div className="flex justify-center">
-              <div className="w-[48px] h-[48px] rounded-full bg-[#1e1e21] flex items-center justify-center border border-white/5">
-                <Mail className="w-[20px] h-[20px] text-primary-accent" />
+              <div className="text-center mb-8">
+                <h2 className="text-[20px] leading-[28px] font-semibold text-white">
+                  Forgot Password?
+                </h2>
+                <p className="mt-2 text-[14px] leading-[22px] text-[#94a3b8]">
+                  Enter your email address and we&apos;ll send you instructions
+                  to reset your password
+                </p>
               </div>
-            </div>
 
-            {/* Content */}
-            <div className="flex flex-col gap-[8px]">
-              <p className="text-[14px] leading-[22px] font-normal text-[#a1a1aa] max-w-[360px] mx-auto">
-                Click the link in the email to reset your password. The link will expire in 24 hours.
-              </p>
-              <p className="text-[12px] font-normal text-[#a1a1aa]/50">
-                Didn&apos;t receive the email? Check your spam folder.
-              </p>
-            </div>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="email"
+                    className="block text-[14px] leading-[20px] font-medium text-white"
+                  >
+                    Email Address
+                  </label>
+                  <input
+                    id="email"
+                    required
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="admin@babysit.com"
+                    className="w-full h-[48px] bg-[#0f172a]/60 border border-[#334155]/50 rounded-[10px] px-4 text-[15px] text-white placeholder:text-[#64748b] focus:outline-none focus:border-[#b8e0f0]/60 focus:ring-2 focus:ring-[#b8e0f0]/15 transition-all"
+                  />
+                </div>
 
-            {/* Buttons */}
-            <div className="flex flex-col gap-[12px]">
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full h-[48px] bg-[#b8e0f0] hover:bg-[#c8e8f5] active:scale-[0.99] text-[#0a0f24] text-[16px] font-semibold rounded-[10px] transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    "Send Reset Instructions"
+                  )}
+                </button>
+              </form>
+            </>
+          ) : (
+            <div className="text-center">
+              {/* Teal-green checkmark badge */}
+              <div className="flex justify-center mb-5">
+                <div className="w-16 h-16 rounded-full bg-[#34d399]/15 flex items-center justify-center">
+                  <CheckCircle2 className="w-9 h-9 text-[#34d399]" strokeWidth={1.5} />
+                </div>
+              </div>
+
+              <h2 className="text-[20px] leading-[28px] font-semibold text-white">
+                Check Your Email
+              </h2>
+
+              <p className="mt-3 text-[14px] leading-[22px] text-[#94a3b8]">
+                We&apos;ve sent password reset instructions to
+              </p>
+
+              <p className="mt-4 text-[16px] font-medium text-[#b8e0f0] break-all">
+                {email}
+              </p>
+
+              <p className="mt-4 text-[14px] leading-[22px] text-[#94a3b8]">
+                Click the link in the email to reset your password. If you don&apos;t see the email, check your spam folder.
+              </p>
+
               <button
                 type="button"
-                className="w-full h-[50px] bg-transparent border border-[#27272a] text-white text-[15px] font-semibold rounded-[8px] hover:bg-white/5 transition-all"
+                onClick={() => {
+                  setIsSubmitted(false);
+                  setIsLoading(true);
+                  setTimeout(() => {
+                    setIsLoading(false);
+                    setIsSubmitted(true);
+                  }, 1000);
+                }}
+                className="w-full mt-8 h-[48px] bg-[#0f172a]/70 border border-[#334155]/80 text-white text-[15px] font-medium rounded-[12px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_1px_2px_rgba(0,0,0,0.2)] hover:bg-[#0f172a]/90 transition-all"
               >
                 Resend Email
               </button>
+
               <Link
                 href="/"
-                className="w-full h-[50px] bg-primary-accent text-black text-[15px] font-semibold rounded-[8px] flex items-center justify-center hover:brightness-105 transition-all shadow-[0_4px_12px_-4px_rgba(179,255,0,0.3)]"
+                className="mt-4 inline-flex items-center justify-center gap-2 text-[15px] text-white hover:text-[#b8e0f0] transition-colors group"
               >
-                Back to sign in
+                <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+                Back to Sign In
               </Link>
             </div>
+          )}
+        </div>
 
-            {/* Note */}
-            <p className="text-[12px] font-medium text-[#a1a1aa]/40 pt-2">
-              Set new Password (This button just given to complete design flow)
-            </p>
+        {/* Footer link — only on form state */}
+        {!isSubmitted && (
+          <div className="mt-6 text-center text-[14px] leading-[22px]">
+            <p className="text-[#94a3b8]">Remember your password?</p>
+            <Link
+              href="/"
+              className="text-[#b8e0f0] hover:text-[#c8e8f5] font-medium transition-colors"
+            >
+              Sign in here
+            </Link>
           </div>
         )}
       </div>
-
-      {/* Footer */}
-      <footer className="mt-16 text-center">
-        <p className="text-[#a1a1aa]/40 text-[12px] font-medium tracking-wide capital">
-          © 2026 OnlyGigz. All rights reserved.
-        </p>
-      </footer>
     </main>
   );
 }
-
