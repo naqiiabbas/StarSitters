@@ -30,7 +30,7 @@ const menuItems = [
   { name: "Wage Configuration", href: "/wages", icon: DollarSign },
   { name: "Reports & Analytics", href: "/reports", icon: BarChart3 },
   { name: "Disputes & Issues", href: "/disputes", icon: AlertCircle },
-  { name: "Notifications", href: "/notifications", icon: Bell },
+  { name: "Notifications Logs", href: "/notifications", icon: Bell },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 

@@ -144,9 +144,39 @@ const initialDisputes: Dispute[] = [
 ];
 
 export default function DisputesPage() {
-  const [disputes] = useState<Dispute[]>(initialDisputes);
+  const [disputes, setDisputes] = useState<Dispute[]>(initialDisputes);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | DisputeStatus>("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const selected = disputes.find((d) => d.id === selectedId) ?? null;
+
+  const handleResolve = (notes: string) => {
+    if (!selectedId) return;
+    setDisputes((prev) =>
+      prev.map((d) =>
+        d.id === selectedId
+          ? {
+              ...d,
+              status: "Resolved",
+              detail: { ...d.detail, status: "Resolved", resolutionNotes: notes },
+            }
+          : d,
+      ),
+    );
+    setSelectedId(null);
+  };
+
+  const handleUpdateStatus = (status: DisputeStatus) => {
+    if (!selectedId) return;
+    setDisputes((prev) =>
+      prev.map((d) =>
+        d.id === selectedId
+          ? { ...d, status, detail: { ...d.detail, status } }
+          : d,
+      ),
+    );
+  };
 
   const filtered = disputes.filter((d) => {
     const q = search.toLowerCase();
@@ -248,6 +278,7 @@ export default function DisputesPage() {
                   <td className="py-4 pl-4">
                     <div className="flex items-center justify-end">
                       <button
+                        onClick={() => setSelectedId(d.id)}
                         aria-label="View dispute"
                         className="p-1.5 text-[#94a3b8] hover:text-white transition-colors"
                       >
@@ -268,6 +299,14 @@ export default function DisputesPage() {
           </table>
         </div>
       </section>
+
+      <DisputeDetailsModal
+        isOpen={selected !== null}
+        onClose={() => setSelectedId(null)}
+        data={selected?.detail ?? null}
+        onResolve={handleResolve}
+        onUpdateStatus={handleUpdateStatus}
+      />
     </div>
   );
 }
