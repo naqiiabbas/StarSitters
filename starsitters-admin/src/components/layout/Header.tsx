@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Search, Bell, ChevronDown, User, Menu } from "lucide-react";
-import { NotificationPanel } from "./NotificationPanel";
 import { ProfileDropdown } from "./ProfileDropdown";
 
 interface HeaderProps {
@@ -10,7 +10,7 @@ interface HeaderProps {
 }
 
 export function Header({ onMenuClick }: HeaderProps) {
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const router = useRouter();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   return (
@@ -38,31 +38,18 @@ export function Header({ onMenuClick }: HeaderProps) {
       {/* Right: notifications + user */}
       <div className="flex items-center gap-4 sm:gap-6 relative">
         <button
-          onClick={() => {
-            setIsNotificationsOpen(!isNotificationsOpen);
-            if (isProfileOpen) setIsProfileOpen(false);
-          }}
+          onClick={() => router.push("/notifications")}
           aria-label="Notifications"
-          className={`relative p-2 transition-colors ${
-            isNotificationsOpen ? "text-[#b8e0f0]" : "text-[#94a3b8] hover:text-white"
-          }`}
+          className="relative p-2 text-[#94a3b8] hover:text-white transition-colors"
         >
           <Bell className="w-[22px] h-[22px]" strokeWidth={1.75} />
-          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[#ef4444] text-white text-[10px] font-bold flex items-center justify-center rounded-full">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[#b8e0f0] text-[#0a0f24] text-[10px] font-bold flex items-center justify-center rounded-full">
             2
           </span>
         </button>
 
-        <NotificationPanel
-          isOpen={isNotificationsOpen}
-          onClose={() => setIsNotificationsOpen(false)}
-        />
-
         <div
-          onClick={() => {
-            setIsProfileOpen(!isProfileOpen);
-            if (isNotificationsOpen) setIsNotificationsOpen(false);
-          }}
+          onClick={() => setIsProfileOpen(!isProfileOpen)}
           className="flex items-center gap-3 cursor-pointer group relative"
         >
           <div className="text-right hidden sm:flex flex-col justify-center">
