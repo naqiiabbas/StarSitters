@@ -5,34 +5,32 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard,
+  LayoutGrid,
   Users,
+  Smile,
+  GraduationCap,
+  BookOpen,
   Briefcase,
-  SearchCode,
-  CreditCard,
-  FileText,
-  MessageSquare,
-  Star,
-  ShieldAlert,
-  Bell,
+  DollarSign,
   BarChart3,
+  AlertCircle,
+  Bell,
   Settings,
   LogOut,
-  X
+  X,
 } from "lucide-react";
 
 const menuItems = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Users Management", href: "/users", icon: Users },
-  { name: "Gig Management", href: "/gigs", icon: Briefcase },
-  { name: "Scraper Module", href: "/scraper", icon: SearchCode },
-  { name: "Payments & Escrow", href: "/payments", icon: CreditCard },
-  { name: "Contracts", href: "/contracts", icon: FileText },
-  { name: "Reviews Management", href: "/reviews", icon: MessageSquare },
-  { name: "Featured Artists", href: "/featured", icon: Star },
-  { name: "Disputes", href: "/disputes", icon: ShieldAlert },
-  { name: "Notifications", href: "/notifications", icon: Bell },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutGrid },
+  { name: "Families Management", href: "/families", icon: Users },
+  { name: "Babysitters Management", href: "/babysitters", icon: Smile },
+  { name: "Certifications", href: "/certifications", icon: GraduationCap },
+  { name: "Course Management", href: "/courses", icon: BookOpen },
+  { name: "Jobs Monitoring", href: "/jobs", icon: Briefcase },
+  { name: "Wage Configuration", href: "/wages", icon: DollarSign },
   { name: "Reports & Analytics", href: "/reports", icon: BarChart3 },
+  { name: "Disputes & Issues", href: "/disputes", icon: AlertCircle },
+  { name: "Notifications", href: "/notifications", icon: Bell },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
@@ -51,48 +49,48 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   }, []);
 
   const handleLogout = () => {
-    // BACKEND DEVELOPER: Clear session, tokens, or cookies here
     onClose();
     router.push("/");
   };
 
   return (
-    <aside className={`w-[280px] h-screen bg-[#0F0F0F] border-r border-[#1a1a1e] fixed left-0 top-0 flex flex-col z-50 transition-transform duration-300 transform ${
-      isOpen ? "translate-x-0" : "-translate-x-full xl:translate-x-0"
-    }`}>
-      {/* Header / Logo */}
-      <div className="p-8 pb-10 flex items-center justify-between">
+    <aside
+      className={`w-[280px] h-screen fixed left-0 top-0 z-50 flex flex-col border-r border-[#334155]/40 bg-[#0f172a]/60 backdrop-blur-md transition-transform duration-300 transform ${
+        isOpen ? "translate-x-0" : "-translate-x-full xl:translate-x-0"
+      }`}
+    >
+      {/* Logo + title */}
+      <div className="px-6 py-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="relative w-10 h-10">
+          <div className="relative w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
             <Image
-              src="/logo.png"
-              alt="OnlyGigz Logo"
+              src="/star-sitters-logo.png"
+              alt="Star Sitters"
               fill
-              sizes="40px"
-              className="object-contain"
+              sizes="48px"
+              className="object-cover"
             />
           </div>
           <div>
-            <h2 className="text-white font-bold text-[18px] leading-tight">
-              OnlyGigz Admin
+            <h2 className="text-white font-semibold text-[15px] leading-tight">
+              Admin Dashboard
             </h2>
-            <p className="text-[#a1a1aa] text-[11px] font-medium tracking-wide">
-              Admin Panel
-            </p>
+            <p className="text-[#94a3b8] text-[12px] mt-0.5">Admin Panel</p>
           </div>
         </div>
-        
-        {/* Mobile Close Button */}
-        <button 
+
+        {/* Mobile close */}
+        <button
           onClick={onClose}
-          className="xl:hidden p-2 text-[#a1a1aa] hover:text-white transition-colors"
+          className="xl:hidden p-2 text-[#94a3b8] hover:text-white transition-colors"
+          aria-label="Close menu"
         >
-          <X size={20} />
+          <X size={18} />
         </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-4 overflow-y-auto space-y-2 custom-scrollbar pb-10 pt-2">
+      {/* Nav */}
+      <nav className="flex-1 px-4 pt-2 pb-4 overflow-y-auto custom-scrollbar space-y-2">
         {menuItems.map((item) => {
           const isActive = mounted && pathname === item.href;
           const Icon = item.icon;
@@ -104,29 +102,32 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               onClick={() => {
                 if (window.innerWidth < 1280) onClose();
               }}
-              className={`flex items-center gap-3.5 px-5 py-3.5 rounded-[10px] transition-all duration-200 group border ${isActive
-                ? "bg-[#b3ff00] border-[#b3ff00] text-black font-bold shadow-[0_0_20px_-5px_rgba(179,255,0,0.3)]"
-                : "bg-transparent border-[#1a1a1e] text-white hover:border-[#27272a] hover:bg-white/5"
-                }`}
+              className={`flex items-center gap-3 px-4 h-[48px] rounded-[10px] border transition-all duration-200 ${
+                isActive
+                  ? "bg-[#b8e0f0] border-[#b8e0f0] text-[#0a0f24] font-semibold"
+                  : "bg-[#1e293b]/40 border-[#334155]/40 text-white hover:bg-[#1e293b]/70 hover:border-[#334155]/70"
+              }`}
             >
               <Icon
-                className={`w-[20px] h-[20px] transition-colors ${isActive ? "text-black" : "text-white group-hover:text-[#b3ff00]"
-                  }`}
+                className={`w-[18px] h-[18px] flex-shrink-0 ${
+                  isActive ? "text-[#0a0f24]" : "text-white"
+                }`}
+                strokeWidth={1.75}
               />
-              <span className="text-[14px] font-medium">{item.name}</span>
+              <span className="text-[14px] truncate">{item.name}</span>
             </Link>
           );
         })}
       </nav>
 
-      {/* Logout at Bottom */}
-      <div className="p-4.5 border-t border-[#1a1a1e]">
-        <button 
+      {/* Logout */}
+      <div className="px-4 pb-5">
+        <button
           onClick={handleLogout}
-          className="flex items-center gap-3.5 px-5 py-3.5 w-full rounded-[10px] border border-[#1a1a1e] text-[#ef4444] hover:bg-[#ef4444]/10 hover:border-[#ef4444]/20 transition-all group"
+          className="flex items-center gap-3 px-4 h-[48px] w-full rounded-[10px] text-[#ef4444] hover:bg-[#ef4444]/10 transition-all"
         >
-          <LogOut className="w-[20px] h-[20px]" />
-          <span className="text-[14px] font-bold">Logout</span>
+          <LogOut className="w-[18px] h-[18px]" strokeWidth={1.75} />
+          <span className="text-[14px] font-semibold">Logout</span>
         </button>
       </div>
     </aside>

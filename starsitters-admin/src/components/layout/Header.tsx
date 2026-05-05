@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Bell, ChevronDown, User, LogOut, Menu } from "lucide-react";
+import { Search, Bell, ChevronDown, User, Menu } from "lucide-react";
 import { NotificationPanel } from "./NotificationPanel";
 import { ProfileDropdown } from "./ProfileDropdown";
 
@@ -14,68 +14,75 @@ export function Header({ onMenuClick }: HeaderProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   return (
-    <header className="h-[80px] bg-[#0F0F0F] border-b border-[#1a1a1e] fixed top-0 right-0 left-0 xl:left-[280px] z-40 flex items-center justify-between px-4 sm:px-10 transition-all duration-300">
-      {/* Mobile Menu Button & Search */}
+    <header className="h-[80px] bg-[#0f172a]/60 backdrop-blur-md border-b border-[#334155]/40 fixed top-0 right-0 left-0 xl:left-[280px] z-40 flex items-center justify-between px-4 sm:px-8">
+      {/* Left: hamburger + search */}
       <div className="flex items-center gap-4 flex-1">
-        <button 
+        <button
           onClick={onMenuClick}
-          className="xl:hidden p-2 text-[#a1a1aa] hover:text-white transition-colors"
+          className="xl:hidden p-2 text-[#94a3b8] hover:text-white transition-colors"
+          aria-label="Open menu"
         >
-          <Menu size={24} />
+          <Menu size={22} />
         </button>
 
-        {/* Search Bar - Responsive width */}
-        <div className="relative w-full max-w-[280px] group hidden sm:block">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#52525b] group-focus-within:text-[#b3ff00] transition-colors" />
+        <div className="relative w-full max-w-[420px] hidden sm:block">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#64748b]" />
           <input
             type="text"
             placeholder="Search..."
-            className="w-full h-[42px] bg-[#1A1A1A] border border-[#27272a] rounded-xl pl-11 pr-4 text-[14px] text-white focus:outline-none focus:border-[#b3ff00]/40 transition-all placeholder:text-[#52525b]"
+            className="w-full h-[44px] bg-[#0f172a]/70 border border-[#334155]/60 rounded-[10px] pl-11 pr-4 text-[14px] text-white placeholder:text-[#64748b] focus:outline-none focus:border-[#b8e0f0]/50 focus:ring-2 focus:ring-[#b8e0f0]/15 transition-all"
           />
         </div>
       </div>
 
-      {/* Right Side Actions */}
-      <div className="flex items-center gap-4 sm:gap-8 relative">
-        {/* Notifications */}
-        <button 
+      {/* Right: notifications + user */}
+      <div className="flex items-center gap-4 sm:gap-6 relative">
+        <button
           onClick={() => {
             setIsNotificationsOpen(!isNotificationsOpen);
             if (isProfileOpen) setIsProfileOpen(false);
           }}
-          className={`relative p-2 transition-colors ${isNotificationsOpen ? "text-[#b3ff00]" : "text-[#a1a1aa] hover:text-white"}`}
+          aria-label="Notifications"
+          className={`relative p-2 transition-colors ${
+            isNotificationsOpen ? "text-[#b8e0f0]" : "text-[#94a3b8] hover:text-white"
+          }`}
         >
-          <Bell className="w-[22px] h-[22px]" />
-          <span className="absolute -top-0.5 -right-0.5 w-[18px] h-[18px] bg-[#A2F301] text-black text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-[#0A0A0A]">
+          <Bell className="w-[22px] h-[22px]" strokeWidth={1.75} />
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[#ef4444] text-white text-[10px] font-bold flex items-center justify-center rounded-full">
             2
           </span>
         </button>
 
-        <NotificationPanel 
-          isOpen={isNotificationsOpen} 
-          onClose={() => setIsNotificationsOpen(false)} 
+        <NotificationPanel
+          isOpen={isNotificationsOpen}
+          onClose={() => setIsNotificationsOpen(false)}
         />
 
-        {/* User Profile */}
-        <div 
+        <div
           onClick={() => {
             setIsProfileOpen(!isProfileOpen);
             if (isNotificationsOpen) setIsNotificationsOpen(false);
           }}
-          className="flex items-center gap-2 sm:gap-4 cursor-pointer group relative"
+          className="flex items-center gap-3 cursor-pointer group relative"
         >
-          <div className="text-right flex flex-col justify-center hidden sm:flex">
-            <p className="text-[14px] font-bold text-white leading-none mb-1 group-hover:text-[#b3ff00] transition-colors">Admin User</p>
-            <p className="text-[11px] text-[#52525b] font-medium leading-none">Super Admin</p>
+          <div className="text-right hidden sm:flex flex-col justify-center">
+            <p className="text-[14px] font-semibold text-white leading-none mb-1 group-hover:text-[#b8e0f0] transition-colors">
+              Leah Pierce
+            </p>
+            <p className="text-[12px] text-[#94a3b8] leading-none">Super Admin</p>
           </div>
-          <div className={`w-[36px] h-[36px] sm:w-[40px] sm:h-[40px] rounded-full bg-[#b3ff00] flex items-center justify-center border border-white/10 shadow-lg transition-all ${isProfileOpen ? "ring-2 ring-[#b3ff00]/50" : "group-hover:scale-105"}`}>
-            <User className="w-4 h-4 sm:w-5 sm:h-5 text-black" />
+          <div className="w-[40px] h-[40px] rounded-full bg-[#334155]/70 border border-[#475569]/40 flex items-center justify-center">
+            <User className="w-5 h-5 text-[#cbd5e1]" strokeWidth={1.75} />
           </div>
-          <ChevronDown className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#52525b] transition-all duration-300 ${isProfileOpen ? "rotate-180 text-white" : "group-hover:text-white"}`} />
-          
-          <ProfileDropdown 
-            isOpen={isProfileOpen} 
-            onClose={() => setIsProfileOpen(false)} 
+          <ChevronDown
+            className={`w-4 h-4 text-[#94a3b8] transition-transform ${
+              isProfileOpen ? "rotate-180 text-white" : ""
+            }`}
+          />
+
+          <ProfileDropdown
+            isOpen={isProfileOpen}
+            onClose={() => setIsProfileOpen(false)}
           />
         </div>
       </div>
