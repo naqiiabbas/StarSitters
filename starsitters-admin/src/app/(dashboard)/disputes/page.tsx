@@ -1,325 +1,357 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { 
-  AlertCircle, 
-  CheckCircle2, 
-  Flag, 
-  UserX, 
-  CheckCircle,
-  Clock,
-  Paperclip,
-  ShieldAlert
-} from "lucide-react";
-import { Toast } from "@/components/ui/Toast";
-import { SendWarningModal } from "@/components/ui/SendWarningModal";
-import { SuspendUserModal } from "@/components/ui/SuspendUserModal";
+import React, { useState } from "react";
+import { Eye, Search, ChevronDown, AlertTriangle } from "lucide-react";
+import {
+  DisputeDetailsModal,
+  type DisputeDetail,
+  type DisputePriority,
+  type DisputeStatus,
+} from "@/components/ui/DisputeDetailsModal";
 
-// --- Types & Interfaces ---
 interface Dispute {
   id: string;
-  priority: "high" | "critical" | "medium" | "low";
-  status: "open" | "resolved";
-  gigReference: string;
-  filedDate: string;
-  organizer: string;
-  musician: string;
-  reason: string;
-  evidenceLink: string;
-  description: string;
+  jobId: string;
+  reportedBy: string;
+  issueType: string;
+  reportedDate: string;
+  priority: DisputePriority;
+  status: DisputeStatus;
+  detail: DisputeDetail;
 }
 
-// --- Mock Data ---
-// BACKEND DEVELOPER: Replace this mock array with a fetch call to your disputes endpoint.
-const MOCK_DISPUTES: Dispute[] = [
+const initialDisputes: Dispute[] = [
   {
-    id: "DSP-001",
-    priority: "high",
-    status: "open",
-    gigReference: "Jazz Night at Blue Note",
-    filedDate: "2026-02-16",
-    organizer: "Metro Events LLC",
-    musician: "Sarah Johnson",
-    reason: "Payment delay",
-    evidenceLink: "Contract_proof.pdf",
-    description: "Payment was not released 24 hours after gig completion as agreed."
+    id: "D001",
+    jobId: "J1247",
+    reportedBy: "Johnson Family",
+    issueType: "Time Discrepancy",
+    reportedDate: "2024-02-24 18:30",
+    priority: "High",
+    status: "Open",
+    detail: {
+      id: "D001",
+      jobId: "J1247",
+      reportedBy: "Johnson Family",
+      issueType: "Time Discrepancy",
+      priority: "High",
+      status: "Open",
+      description: "Clock-out time doesn't match actual end time",
+      clockIn: "2024-02-24 14:00",
+      clockOut: "2024-02-24 18:00",
+      calculatedHours: "4.0 hours",
+      calculatedWage: "$60.00",
+      messageHistory: [
+        {
+          author: "Johnson Family",
+          body: "The session actually ended at 17:45, not 18:00",
+          timestamp: "2024-02-24 18:30",
+        },
+      ],
+    },
   },
   {
-    id: "DSP-002",
-    priority: "critical",
-    status: "open",
-    gigReference: "Rock Concert",
-    filedDate: "2026-02-15",
-    organizer: "Blue Note Jazz Club",
-    musician: "Mike Peterson",
-    reason: "No show",
-    evidenceLink: "Venue_confirmation.jpg",
-    description: "Musician did not show up to the venue on the scheduled date."
+    id: "D002",
+    jobId: "J1245",
+    reportedBy: "Sarah Davis (Babysitter)",
+    issueType: "Payment Issue",
+    reportedDate: "2024-02-23 20:15",
+    priority: "Medium",
+    status: "Investigating",
+    detail: {
+      id: "D002",
+      jobId: "J1245",
+      reportedBy: "Sarah Davis (Babysitter)",
+      issueType: "Payment Issue",
+      priority: "Medium",
+      status: "Investigating",
+      description: "Wage calculation appears incorrect",
+      clockIn: "2024-02-23 14:00",
+      clockOut: "2024-02-23 18:00",
+      calculatedHours: "4.0 hours",
+      calculatedWage: "$60.00",
+      messageHistory: [
+        {
+          author: "Sarah Davis",
+          body: "I worked 4 hours but was only paid for 3.5",
+          timestamp: "2024-02-23 20:15",
+        },
+      ],
+    },
   },
   {
-    id: "DSP-003",
-    priority: "medium",
-    status: "resolved",
-    gigReference: "Wedding Reception",
-    filedDate: "2026-02-10",
-    organizer: "City Sound Productions",
-    musician: "Lisa Anderson",
-    reason: "Quality of service",
-    evidenceLink: "Video_recording.mp4",
-    description: "Performance quality was below expectations based on profile."
+    id: "D003",
+    jobId: "J1240",
+    reportedBy: "Miller Family",
+    issueType: "No-Show",
+    reportedDate: "2024-02-22 15:00",
+    priority: "High",
+    status: "Resolved",
+    detail: {
+      id: "D003",
+      jobId: "J1240",
+      reportedBy: "Miller Family",
+      issueType: "No-Show",
+      priority: "High",
+      status: "Resolved",
+      description: "Babysitter did not arrive at scheduled time",
+      clockIn: "2024-02-22 14:00",
+      clockOut: "2024-02-22 18:00",
+      calculatedHours: "4.0 hours",
+      calculatedWage: "$60.00",
+      messageHistory: [
+        {
+          author: "Miller Family",
+          body: "The session actually ended at 17:45, not 18:00",
+          timestamp: "2024-02-22 15:00",
+        },
+      ],
+      resolutionNotes:
+        "Time adjusted to 3.75 hours. Wage recalculated to $56.25. Family notified.",
+    },
   },
   {
-    id: "DSP-004",
-    priority: "high",
-    status: "resolved",
-    gigReference: "Corporate Event",
-    filedDate: "2026-02-08",
-    organizer: "Metro Events LLC",
-    musician: "David Chen",
-    reason: "Contract breach",
-    evidenceLink: "Email_thread.pdf",
-    description: "Organizer changed gig details without mutual agreement."
-  }
+    id: "D004",
+    jobId: "J1238",
+    reportedBy: "Jake Thompson (Babysitter)",
+    issueType: "Safety Concern",
+    reportedDate: "2024-02-21 14:30",
+    priority: "High",
+    status: "Resolved",
+    detail: {
+      id: "D004",
+      jobId: "J1238",
+      reportedBy: "Jake Thompson (Babysitter)",
+      issueType: "Safety Concern",
+      priority: "High",
+      status: "Resolved",
+      description: "Reported unsafe situation at the family residence",
+      clockIn: "2024-02-21 09:00",
+      clockOut: "2024-02-21 12:00",
+      calculatedHours: "3.0 hours",
+      calculatedWage: "$45.00",
+      messageHistory: [
+        {
+          author: "Jake Thompson",
+          body: "There was no one home when I arrived for the scheduled session",
+          timestamp: "2024-02-21 14:30",
+        },
+      ],
+      resolutionNotes:
+        "Family contacted and warned. Session marked complete. Babysitter compensated for full booked hours.",
+    },
+  },
 ];
 
 export default function DisputesPage() {
-  // BACKEND DEVELOPER: Initialize this with data from your API.
-  // Consider using React Query or a similar library for data fetching.
-  const [disputes, setDisputes] = useState<Dispute[]>(MOCK_DISPUTES);
-  const [activeTab, setActiveTab] = useState<"open" | "resolved">("open");
-  const [toast, setToast] = useState({ show: false, message: "" });
-  
-  const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
-  const [isSuspendModalOpen, setIsSuspendModalOpen] = useState(false);
-  const [selectedDisputeId, setSelectedDisputeId] = useState<string | null>(null);
+  const [disputes] = useState<Dispute[]>(initialDisputes);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | DisputeStatus>("all");
 
-  // --- Handlers ---
-  const handleAction = (id: string, action: string) => {
-    if (action === "Send Warning") {
-      setSelectedDisputeId(id);
-      setIsWarningModalOpen(true);
-      return;
-    }
-
-    if (action === "Suspend User") {
-      setSelectedDisputeId(id);
-      setIsSuspendModalOpen(true);
-      return;
-    }
-
-    // BACKEND DEVELOPER: Implement dispute actions via API.
-    // e.g., await api.post(`/disputes/${id}/action`, { actionType: action });
-    setToast({ show: true, message: `Dispute ${id} closed successfully.` });
-    
-    if (action === "Close Dispute") {
-      setDisputes(prev => prev.map(d => 
-        d.id === id ? { ...d, status: "resolved" } : d
-      ));
-    }
-  };
-
-  const confirmWarning = () => {
-    // BACKEND DEVELOPER: Implement warning logic via API.
-    setToast({ show: true, message: `Warning sent for Dispute ${selectedDisputeId}.` });
-    setIsWarningModalOpen(false);
-    setSelectedDisputeId(null);
-  };
-
-  const confirmSuspend = () => {
-    // BACKEND DEVELOPER: Implement suspension logic via API.
-    setToast({ show: true, message: `User suspended for Dispute ${selectedDisputeId}.` });
-    setIsSuspendModalOpen(false);
-    setSelectedDisputeId(null);
-  };
-
-  // --- Filtering Logic ---
-  const filteredDisputes = useMemo(() => {
-    return disputes.filter(d => d.status === activeTab);
-  }, [activeTab, disputes]);
-
-  // --- Stats Calculation ---
-  const stats = {
-    open: disputes.filter(d => d.status === "open").length,
-    resolved: disputes.filter(d => d.status === "resolved").length,
-    critical: disputes.filter(d => d.priority === "critical" && d.status === "open").length,
-    rate: "87%"
-  };
-
-  // --- UI Configuration Arrays ---
-  const statCards = [
-    { label: "Open Disputes", value: stats.open, icon: Clock, color: "text-[#F59E0B]", bg: "bg-[#F59E0B]/10", border: "border-[#F59E0B]/20" },
-    { label: "Resolved", value: stats.resolved, icon: CheckCircle2, color: "text-[#10B981]", bg: "bg-[#10B981]/10", border: "border-[#10B981]/20" },
-    { label: "Critical Priority", value: stats.critical, icon: ShieldAlert, color: "text-[#EF4444]", bg: "bg-[#EF4444]/10", border: "border-[#EF4444]/20" },
-    { label: "Resolution Rate", value: stats.rate, icon: CheckCircle, color: "text-[#A2F301]", bg: "bg-[#A2F301]/10", border: "border-[#A2F301]/20" }
-  ];
-
-  const getPriorityStyles = (priority: string) => {
-    switch (priority) {
-      case "critical": return "bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20";
-      case "high": return "bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20";
-      case "medium": return "bg-[#3B82F6]/10 text-[#3B82F6] border-[#3B82F6]/20";
-      default: return "bg-white/5 text-[#999999] border-white/10";
-    }
-  };
-
-  const getStatusStyles = (status: string) => {
-    switch (status) {
-      case "resolved": return "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/20";
-      case "open": return "bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20";
-      default: return "bg-white/5 text-[#999999] border-white/10";
-    }
-  };
+  const filtered = disputes.filter((d) => {
+    const q = search.toLowerCase();
+    const matchesSearch =
+      !q ||
+      d.id.toLowerCase().includes(q) ||
+      d.jobId.toLowerCase().includes(q) ||
+      d.reportedBy.toLowerCase().includes(q) ||
+      d.issueType.toLowerCase().includes(q);
+    const matchesStatus = statusFilter === "all" || d.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   return (
-    <div className="w-full pb-20">
-      {/* Header Section */}
-      <div className="mb-8">
-        <h1 className="text-2xl sm:text-[30px] font-bold text-white leading-tight mb-1">Dispute Resolution</h1>
-        <p className="text-[#999999] text-sm sm:text-[16px]">Manage and resolve disputes between musicians and organizers</p>
+    <div className="space-y-6">
+      {/* Page header */}
+      <div>
+        <h1 className="text-[32px] leading-[40px] font-bold text-white">
+          Disputes &amp; Issues
+        </h1>
+        <p className="mt-1 text-[15px] text-[#94a3b8]">
+          Manage reported issues and dispute resolution
+        </p>
       </div>
 
-      {/* Stats Cards Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-10">
-        {statCards.map((card, i) => (
-          <div key={i} className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-[8px] p-4 sm:p-6 flex items-center gap-4 hover:border-white/10 transition-all group shadow-xl">
-            <div className={`w-12 h-12 sm:w-[48px] sm:h-[48px] ${card.bg} ${card.border} border rounded-[8px] flex items-center justify-center shrink-0`}>
-              <card.icon className={`w-5 h-5 sm:w-6 sm:h-6 ${card.color}`} />
+      {/* Stat cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <SimpleStatCard label="Open Disputes" value="3" valueColor="text-white" />
+        <SimpleStatCard label="Investigating" value="5" valueColor="text-[#3b82f6]" />
+        <SimpleStatCard label="Resolved This Month" value="28" valueColor="text-[#34d399]" />
+        <SimpleStatCard label="Avg Resolution Time" value="1.8 days" valueColor="text-[#c4b5fd]" />
+      </div>
+
+      {/* Table card */}
+      <section className="bg-[#1e293b]/60 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.6)]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+          <h2 className="text-[18px] leading-[26px] font-semibold text-white">
+            All Disputes
+          </h2>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748b]" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search disputes..."
+                className="w-full sm:w-[280px] h-[40px] bg-[#0f172a]/60 border border-[#334155]/50 rounded-[10px] pl-9 pr-4 text-[14px] text-white placeholder:text-[#64748b] focus:outline-none focus:border-[#b8e0f0]/60 focus:ring-2 focus:ring-[#b8e0f0]/15 transition-all"
+              />
             </div>
-            <div>
-              <p className="text-[#999999] text-[12px] sm:text-[14px] font-medium mb-0.5">{card.label}</p>
-              <p className="text-white text-2xl sm:text-[28px] font-bold leading-none">{card.value}</p>
+            <div className="relative">
+              <select
+                value={statusFilter}
+                onChange={(e) =>
+                  setStatusFilter(e.target.value as "all" | DisputeStatus)
+                }
+                className="appearance-none w-full sm:w-[170px] h-[40px] bg-[#0f172a]/60 border border-[#334155]/50 rounded-[10px] pl-3 pr-9 text-[14px] text-white focus:outline-none focus:border-[#b8e0f0]/60 focus:ring-2 focus:ring-[#b8e0f0]/15 transition-all"
+              >
+                <option value="all">All Statuses</option>
+                <option value="Open">Open</option>
+                <option value="Investigating">Investigating</option>
+                <option value="Resolved">Resolved</option>
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748b] pointer-events-none" />
             </div>
           </div>
-        ))}
-      </div>
+        </div>
 
-      {/* Tabs */}
-      <div className="flex gap-4 sm:gap-8 mb-8 border-b border-[#2A2A2A] overflow-x-auto custom-scrollbar whitespace-nowrap">
-        {[
-          { id: "open", label: `Open Disputes (${stats.open})` },
-          { id: "resolved", label: `Resolved (${stats.resolved})` }
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`pb-4 text-[14px] font-bold transition-all relative shrink-0 ${
-              activeTab === tab.id ? "text-[#A2F301]" : "text-[#999999] hover:text-white"
-            }`}
-          >
-            {tab.label}
-            {activeTab === tab.id && (
-              <div className="absolute bottom-0 left-0 w-full h-[2px] bg-[#A2F301] shadow-[0_0_10px_rgba(162,243,1,0.5)]" />
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Disputes List */}
-      <div className="flex flex-col gap-6">
-        {filteredDisputes.map((dispute) => (
-          <div key={dispute.id} className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-[8px] p-6 sm:p-8 animate-in fade-in duration-500 shadow-2xl">
-            {/* Card Header */}
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
-              <h2 className="text-white text-[18px] sm:text-[20px] font-bold">{dispute.id}</h2>
-              <div className={`px-2 py-0.5 rounded-[4px] text-[10px] sm:text-[11px] font-bold border ${getPriorityStyles(dispute.priority)}`}>
-                {dispute.priority} priority
-              </div>
-              <div className={`px-2 py-0.5 rounded-[4px] text-[10px] sm:text-[11px] font-bold border ${getStatusStyles(dispute.status)}`}>
-                {dispute.status}
-              </div>
-            </div>
-            
-            <p className="text-[#999999] text-[13px] sm:text-[14px] mb-6 sm:mb-8">
-              Gig: {dispute.gigReference} <br className="sm:hidden" /> <span className="hidden sm:inline">•</span> Filed on {dispute.filedDate}
-            </p>
-
-            {/* Details Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 sm:gap-x-12 mb-8">
-              <div>
-                <p className="text-[#52525b] text-[11px] uppercase tracking-wider font-bold mb-1">Organizer</p>
-                <p className="text-white text-[14px] sm:text-[15px] font-semibold">{dispute.organizer}</p>
-              </div>
-              <div>
-                <p className="text-[#52525b] text-[11px] uppercase tracking-wider font-bold mb-1">Musician</p>
-                <p className="text-white text-[14px] sm:text-[15px] font-semibold">{dispute.musician}</p>
-              </div>
-              <div>
-                <p className="text-[#52525b] text-[11px] uppercase tracking-wider font-bold mb-1">Reason</p>
-                <p className="text-white text-[14px] sm:text-[15px] font-semibold">{dispute.reason}</p>
-              </div>
-              <div>
-                <p className="text-[#52525b] text-[11px] uppercase tracking-wider font-bold mb-1">Evidence Attached</p>
-                <div className="flex items-center gap-2 text-[#A2F301] text-[14px] sm:text-[15px] font-semibold cursor-pointer hover:underline">
-                  <Paperclip size={14} className="shrink-0" />
-                  <span className="truncate">{dispute.evidenceLink}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Description */}
-            <div className="mb-8 sm:mb-10">
-              <p className="text-[#52525b] text-[11px] uppercase tracking-wider font-bold mb-2">Description</p>
-              <p className="text-white/80 text-[14px] sm:text-[15px] leading-relaxed max-w-[800px]">
-                {dispute.description}
-              </p>
-            </div>
-
-            {/* Actions */}
-            {dispute.status === "open" && (
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                <button 
-                  onClick={() => handleAction(dispute.id, "Send Warning")}
-                  className="h-[44px] px-6 rounded-[8px] bg-[#F59E0B]/10 text-[#F59E0B] text-[14px] font-bold flex items-center justify-center sm:justify-start gap-2 hover:bg-[#F59E0B]/20 transition-all"
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full min-w-[940px]">
+            <thead>
+              <tr className="border-b border-[#334155]/50">
+                <Th>Dispute ID</Th>
+                <Th>Job ID</Th>
+                <Th>Reported By</Th>
+                <Th>Issue Type</Th>
+                <Th>Reported Date</Th>
+                <Th>Priority</Th>
+                <Th>Status</Th>
+                <Th align="right">Actions</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((d) => (
+                <tr
+                  key={d.id}
+                  className="border-b border-[#334155]/30 last:border-0"
                 >
-                  <Flag size={18} />
-                  Send Warning
-                </button>
-                <button 
-                  onClick={() => handleAction(dispute.id, "Suspend User")}
-                  className="h-[44px] px-6 rounded-[8px] bg-[#EF4444]/10 text-[#EF4444] text-[14px] font-bold flex items-center justify-center sm:justify-start gap-2 hover:bg-[#EF4444]/20 transition-all"
-                >
-                  <UserX size={18} />
-                  Suspend User
-                </button>
-                <button 
-                  onClick={() => handleAction(dispute.id, "Close Dispute")}
-                  className="h-[44px] px-6 rounded-[8px] bg-[#10B981]/10 text-[#10B981] text-[14px] font-bold flex items-center justify-center sm:justify-start gap-2 hover:bg-[#10B981]/20 transition-all sm:ml-auto"
-                >
-                  <CheckCircle2 size={18} />
-                  Close Dispute
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
-
-        {filteredDisputes.length === 0 && (
-          <div className="bg-[#1A1A1A] border border-[#2A2A2A] border-dashed rounded-[8px] py-20 flex flex-col items-center justify-center">
-            <CheckCircle2 size={48} className="text-[#52525b] mb-4" />
-            <p className="text-[#999999] text-[16px]">No {activeTab} disputes to display.</p>
-          </div>
-        )}
-      </div>
-
-      {/* Notifications */}
-      <SendWarningModal 
-        isOpen={isWarningModalOpen}
-        onClose={() => setIsWarningModalOpen(false)}
-        onConfirm={confirmWarning}
-        disputeId={selectedDisputeId || ""}
-      />
-
-      <SuspendUserModal 
-        isOpen={isSuspendModalOpen}
-        onClose={() => setIsSuspendModalOpen(false)}
-        onConfirm={confirmSuspend}
-      />
-
-      <Toast 
-        show={toast.show}
-        message={toast.message}
-        onClose={() => setToast({ ...toast, show: false })}
-      />
+                  <td className="py-4 pr-4 text-[14px] text-white whitespace-nowrap">{d.id}</td>
+                  <td className="py-4 pr-4 text-[14px] text-white whitespace-nowrap">{d.jobId}</td>
+                  <td className="py-4 pr-4 text-[14px] text-white whitespace-nowrap">{d.reportedBy}</td>
+                  <td className="py-4 pr-4 text-[14px] text-white whitespace-nowrap">{d.issueType}</td>
+                  <td className="py-4 pr-4 text-[14px] text-[#94a3b8] whitespace-nowrap">{d.reportedDate}</td>
+                  <td className="py-4 pr-4">
+                    <PriorityBadge priority={d.priority} />
+                  </td>
+                  <td className="py-4 pr-4">
+                    <StatusBadge status={d.status} />
+                  </td>
+                  <td className="py-4 pl-4">
+                    <div className="flex items-center justify-end">
+                      <button
+                        aria-label="View dispute"
+                        className="p-1.5 text-[#94a3b8] hover:text-white transition-colors"
+                      >
+                        <Eye className="w-[18px] h-[18px]" strokeWidth={1.75} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="py-10 text-center text-[14px] text-[#94a3b8]">
+                    No disputes match your filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
+  );
+}
+
+function SimpleStatCard({
+  label,
+  value,
+  valueColor,
+}: {
+  label: string;
+  value: string;
+  valueColor: string;
+}) {
+  return (
+    <div className="bg-[#1e293b]/60 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.6)]">
+      <p className="text-[13px] leading-[18px] font-medium text-[#94a3b8]">
+        {label}
+      </p>
+      <p className={`mt-3 text-[32px] leading-[40px] font-bold ${valueColor}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function Th({
+  children,
+  align = "left",
+}: {
+  children: React.ReactNode;
+  align?: "left" | "right";
+}) {
+  return (
+    <th
+      className={`text-[13px] font-medium text-[#94a3b8] py-3 ${
+        align === "right" ? "text-right pl-4" : "text-left pr-4"
+      }`}
+    >
+      {children}
+    </th>
+  );
+}
+
+function PriorityBadge({ priority }: { priority: DisputePriority }) {
+  if (priority === "High") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#ef4444]/15 border border-[#ef4444]/30 text-[#ef4444] text-[12px] font-medium">
+        <AlertTriangle className="w-3 h-3" strokeWidth={2.5} />
+        High
+      </span>
+    );
+  }
+  if (priority === "Medium") {
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-[#a78bfa]/15 border border-[#a78bfa]/25 text-[#c4b5fd] text-[12px] font-medium">
+        Medium
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-[#fbbf24]/15 border border-[#fbbf24]/25 text-[#fbbf24] text-[12px] font-medium">
+      Low
+    </span>
+  );
+}
+
+function StatusBadge({ status }: { status: DisputeStatus }) {
+  if (status === "Open") {
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-[#a78bfa]/15 border border-[#a78bfa]/25 text-[#c4b5fd] text-[12px] font-medium">
+        Open
+      </span>
+    );
+  }
+  if (status === "Investigating") {
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-[#3b82f6]/15 border border-[#3b82f6]/30 text-[#60a5fa] text-[12px] font-medium">
+        Investigating
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-[#34d399]/15 border border-[#34d399]/25 text-[#34d399] text-[12px] font-medium">
+      Resolved
+    </span>
   );
 }

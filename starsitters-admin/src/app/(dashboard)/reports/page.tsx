@@ -1,345 +1,331 @@
 "use client";
 
-import React, { useState } from "react";
-import { 
-  Users, 
-  Briefcase, 
-  DollarSign, 
-  TrendingUp, 
-  ArrowUpRight,
-  Search,
+import React, { useEffect, useState } from "react";
+import {
   Calendar,
-  ChevronDown
+  ChevronDown,
+  Download,
+  TrendingUp,
 } from "lucide-react";
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer, 
-  AreaChart, 
-  Area,
+import {
+  ResponsiveContainer,
   BarChart,
   Bar,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   Legend,
-  Cell
 } from "recharts";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
 
-// --- Types & Interfaces ---
-interface GrowthData {
-  month: string;
-  musicians: number;
-  organizers: number;
-  total: number;
-}
-
-interface GigTrendData {
-  month: string;
-  manual: number;
-  scraped: number;
-}
-
-interface RevenueData {
-  month: string;
-  revenue: number;
-  bookings: number;
-}
-
-interface PerformanceMetric {
-  label: string;
-  value: string;
-  subtext: string;
-  color?: string;
-}
-
-// --- Mock Data ---
-// BACKEND DEVELOPER: Replace these mock arrays with calls to your analytics/reporting API.
-// It is recommended to have a single "GET /api/admin/analytics/dashboard" endpoint that 
-// returns all these datasets in one payload for better performance.
-
-const MOCK_GROWTH_DATA: GrowthData[] = [
-  { month: "Jan", musicians: 120, organizers: 40, total: 160 },
-  { month: "Feb", musicians: 180, organizers: 55, total: 235 },
-  { month: "Mar", musicians: 240, organizers: 80, total: 320 },
-  { month: "Apr", musicians: 320, organizers: 110, total: 430 },
-  { month: "May", musicians: 480, organizers: 145, total: 625 },
-  { month: "Jun", musicians: 610, organizers: 190, total: 800 },
+const jobsPerMonth = [
+  { month: "Jan", jobs: 120 },
+  { month: "Feb", jobs: 140 },
+  { month: "Mar", jobs: 155 },
+  { month: "Apr", jobs: 145 },
+  { month: "May", jobs: 165 },
+  { month: "Jun", jobs: 190 },
 ];
 
-const MOCK_GIG_TRENDS: GigTrendData[] = [
-  { month: "Jan", manual: 45, scraped: 82 },
-  { month: "Feb", manual: 58, scraped: 110 },
-  { month: "Mar", manual: 65, scraped: 155 },
-  { month: "Apr", manual: 82, scraped: 190 },
-  { month: "May", manual: 95, scraped: 240 },
-  { month: "Jun", manual: 105, scraped: 285 },
+const hoursWorkedPerMonth = [
+  { month: "Jan", hours: 500 },
+  { month: "Feb", hours: 570 },
+  { month: "Mar", hours: 635 },
+  { month: "Apr", hours: 580 },
+  { month: "May", hours: 670 },
+  { month: "Jun", hours: 770 },
 ];
 
-const MOCK_REVENUE_DATA: RevenueData[] = [
-  { month: "Jan", revenue: 1500, bookings: 45 },
-  { month: "Feb", revenue: 2200, bookings: 68 },
-  { month: "Mar", revenue: 2800, bookings: 92 },
-  { month: "Apr", revenue: 3500, bookings: 124 },
-  { month: "May", revenue: 4600, bookings: 158 },
-  { month: "Jun", revenue: 5400, bookings: 180 },
+const wageDistribution = [
+  { name: "Age 11-12", value: 12500, color: "#a5d8eb" },
+  { name: "Age 13-14", value: 18300, color: "#c4b5fd" },
+  { name: "Age 15-17", value: 27900, color: "#86efac" },
+];
+
+const jobStatusDistribution = [
+  { name: "Completed", value: 1847, color: "#86efac" },
+  { name: "Scheduled", value: 56, color: "#c4b5fd" },
+  { name: "In Progress", value: 34, color: "#a78bfa" },
+];
+
+const userGrowth = [
+  { month: "Jan", families: 205, babysitters: 140 },
+  { month: "Feb", families: 220, babysitters: 155 },
+  { month: "Mar", families: 230, babysitters: 165 },
+  { month: "Apr", families: 240, babysitters: 175 },
+  { month: "May", families: 247, babysitters: 183 },
+  { month: "Jun", families: 252, babysitters: 189 },
 ];
 
 export default function ReportsPage() {
-  const [timeframe, setTimeframe] = useState("Last 6 months");
-  const [isMounted, setIsMounted] = useState(false);
-  const isMobile = useMediaQuery("(max-width: 640px)");
-
-  React.useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  // BACKEND DEVELOPER: Initialize these states with data from your API.
-  const [growthData] = useState<GrowthData[]>(MOCK_GROWTH_DATA);
-  const [gigTrends] = useState<GigTrendData[]>(MOCK_GIG_TRENDS);
-  const [revenueData] = useState<RevenueData[]>(MOCK_REVENUE_DATA);
-
-  // --- UI Configuration Arrays ---
-  const mainStats = [
-    { label: "Total Users", value: "1,590", growth: "24% growth", icon: Users, color: "text-[#A2F301]", bg: "bg-[#A2F301]/10", border: "border-[#A2F301]/20" },
-    { label: "Total Gigs Posted", value: "1,000", growth: "32% growth", icon: Briefcase, color: "text-[#3B82F6]", bg: "bg-[#3B82F6]/10", border: "border-[#3B82F6]/20" },
-    { label: "Total Revenue", value: "$183K", growth: "45% growth", icon: DollarSign, color: "text-[#10B981]", bg: "bg-[#10B981]/10", border: "border-[#10B981]/20" },
-    { label: "Booking Success", value: "76%", growth: "8% growth", icon: TrendingUp, color: "text-[#F59E0B]", bg: "bg-[#F59E0B]/10", border: "border-[#F59E0B]/20" }
-  ];
-
-  const scraperMetrics: PerformanceMetric[] = [
-    { label: "Total Scraping Runs", value: "247", subtext: "Last 30 days" },
-    { label: "Success Rate", value: "94.2%", subtext: "233 successful runs", color: "text-[#10B981]" },
-    { label: "Gigs Imported", value: "1,845", subtext: "58% of total gigs", color: "text-[#A2F301]" }
-  ];
+  const [mounted, setMounted] = useState(false);
+  const [period, setPeriod] = useState("Last 6 Months");
+  useEffect(() => setMounted(true), []);
 
   return (
-    <div className="w-full text-white font-inter pb-20">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl sm:text-[32px] font-bold mb-2 leading-tight">Reports & Analytics</h1>
-        <p className="text-[#999999] text-sm sm:text-[16px]">Comprehensive analytics and data insights</p>
+    <div className="space-y-6">
+      {/* Page header */}
+      <div>
+        <h1 className="text-[32px] leading-[40px] font-bold text-white">
+          Reports &amp; Analytics
+        </h1>
+        <p className="mt-1 text-[15px] text-[#94a3b8]">
+          Platform performance metrics and data insights
+        </p>
       </div>
 
-      {/* Main Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
-        {mainStats.map((stat, idx) => (
-          <div key={idx} className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-[10px] p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5 group hover:border-white/10 transition-all shadow-xl">
-            <div className={`w-12 h-12 sm:w-[56px] sm:h-[56px] rounded-[12px] ${stat.bg} ${stat.border} border flex items-center justify-center shrink-0`}>
-              <stat.icon className={stat.color} size={24} />
-            </div>
-            <div>
-              <p className="text-[#999999] text-[12px] sm:text-[14px] mb-0.5">{stat.label}</p>
-              <h3 className="text-xl sm:text-[28px] font-bold leading-tight">{stat.value}</h3>
-              <p className="text-[#10B981] text-[11px] sm:text-[13px] font-medium flex items-center gap-1 mt-0.5">
-                <span className="text-[12px] sm:text-[14px]">↑</span>
-                {stat.growth.replace('+ ', '').replace('increase', 'growth')}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* User Growth Trends Chart */}
-      <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-[8px] p-6 sm:p-8 mb-8 shadow-2xl">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-          <h2 className="text-[18px] sm:text-[20px] font-bold">User Growth Trends</h2>
-          <div className="relative group w-full sm:w-auto">
-            <button className="w-full sm:w-auto h-[36px] px-4 bg-[#0D0D0D] border border-[#2A2A2A] rounded-[8px] text-[14px] flex items-center justify-between sm:justify-start gap-2 text-[#999999] hover:text-white transition-all">
-              {timeframe}
-              <ChevronDown size={16} />
-            </button>
-          </div>
+      {/* Period + export buttons */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="relative inline-block">
+          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94a3b8] pointer-events-none" />
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            className="appearance-none h-[44px] bg-[#1e293b]/60 backdrop-blur-md border border-white/10 rounded-[10px] pl-9 pr-10 text-[14px] text-white focus:outline-none focus:border-[#b8e0f0]/60 transition-all"
+          >
+            <option className="bg-[#1e293b]">Last 6 Months</option>
+            <option className="bg-[#1e293b]">Last 30 Days</option>
+            <option className="bg-[#1e293b]">Last 12 Months</option>
+            <option className="bg-[#1e293b]">All Time</option>
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94a3b8] pointer-events-none" />
         </div>
-        <div className="h-[300px] sm:h-[320px] w-full min-w-0">
-          {isMounted && (
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <LineChart data={growthData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" vertical={false} />
-                <XAxis 
-                  dataKey="month" 
-                  stroke="#666666" 
-                  fontSize={10} 
-                  tickLine={false} 
-                  axisLine={false} 
-                  dy={10}
-                />
-                <YAxis 
-                  stroke="#666666" 
-                  fontSize={10} 
-                  tickLine={false} 
-                  axisLine={false} 
-                  tickFormatter={(value) => `${value}`}
-                />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: '8px' }}
-                  itemStyle={{ fontSize: '10px' }}
-                />
-                <Legend 
-                  verticalAlign="bottom" 
-                  height={36} 
-                  iconType="circle"
-                  wrapperStyle={{ paddingTop: '20px', fontSize: '10px' }}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="musicians" 
-                  name="Musicians" 
-                  stroke="#A2F301" 
-                  strokeWidth={2} 
-                  dot={{ fill: '#A2F301', r: 3 }} 
-                  activeDot={{ r: 5 }} 
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="organizers" 
-                  name="Organizers" 
-                  stroke="#3B82F6" 
-                  strokeWidth={2} 
-                  dot={{ fill: '#3B82F6', r: 3 }} 
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="total" 
-                  name="Total Users" 
-                  stroke="#8B5CF6" 
-                  strokeWidth={2} 
-                  dot={{ fill: '#8B5CF6', r: 3 }} 
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
+
+        <div className="flex gap-3">
+          <ExportButton label="Export CSV" />
+          <ExportButton label="Export PDF" />
         </div>
       </div>
 
-      {/* Gig Posting Trends Chart */}
-      <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-[8px] p-6 sm:p-8 mb-8 shadow-2xl">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-          <h2 className="text-[18px] sm:text-[20px] font-bold">Gig Posting Trends</h2>
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-sm bg-[#A2F301]" />
-              <span className="text-[11px] sm:text-[12px] text-[#999999]">Manual Posts</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-sm bg-[#3B82F6]" />
-              <span className="text-[11px] sm:text-[12px] text-[#999999]">Scraped Gigs</span>
-            </div>
-          </div>
-        </div>
-        <div className="h-[300px] sm:h-[320px] w-full min-w-0">
-          {isMounted && (
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart data={gigTrends}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" vertical={false} />
-                <XAxis 
-                  dataKey="month" 
-                  stroke="#666666" 
-                  fontSize={10} 
-                  tickLine={false} 
-                  axisLine={false} 
-                  dy={10}
+      {/* Stat cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <DeltaStatCard label="Total Revenue" value="$58,704" delta="+12.5% vs last period" />
+        <DeltaStatCard label="Total Jobs" value="1,847" delta="+8.3% vs last period" />
+        <DeltaStatCard label="Total Hours" value="4,892" delta="+10.2% vs last period" />
+        <DeltaStatCard label="Avg Job Duration" value="2.6h" caption="Per job average" />
+      </div>
+
+      {/* Charts row 1 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ChartCard title="Jobs Per Month">
+          {mounted && (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={jobsPerMonth} margin={{ top: 12, right: 12, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" strokeOpacity={0.4} vertical={false} />
+                <XAxis dataKey="month" stroke="#64748b" fontSize={12} tickLine={false} axisLine={{ stroke: "#334155", strokeOpacity: 0.4 }} />
+                <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} domain={[0, 200]} ticks={[0, 50, 100, 150, 200]} />
+                <Tooltip
+                  cursor={{ fill: "#334155", fillOpacity: 0.2 }}
+                  contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 10, fontSize: 13 }}
+                  labelStyle={{ color: "#fff" }}
+                  itemStyle={{ color: "#cbd5e1" }}
                 />
-                <YAxis 
-                  stroke="#666666" 
-                  fontSize={10} 
-                  tickLine={false} 
-                  axisLine={false} 
-                />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: '8px' }}
-                  cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
-                />
-                <Bar dataKey="manual" name="Manual Posts" fill="#A2F301" radius={[4, 4, 0, 0]} barSize={isMobile ? 15 : 40} />
-                <Bar dataKey="scraped" name="Scraped Gigs" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={isMobile ? 15 : 40} />
+                <Bar dataKey="jobs" fill="#bae6fd" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
-        </div>
-      </div>
+        </ChartCard>
 
-      {/* Revenue & Booking Analytics Chart */}
-      <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-[8px] p-6 sm:p-8 mb-8 shadow-2xl">
-        <div className="mb-8">
-          <h2 className="text-[18px] sm:text-[20px] font-bold">Revenue & Booking Analytics</h2>
-        </div>
-        <div className="h-[300px] sm:h-[320px] w-full min-w-0">
-          {isMounted && (
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <LineChart data={revenueData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" vertical={false} />
-                <XAxis 
-                  dataKey="month" 
-                  stroke="#666666" 
-                  fontSize={10} 
-                  tickLine={false} 
-                  axisLine={false} 
-                  dy={10}
+        <ChartCard title="Hours Worked Per Month">
+          {mounted && (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={hoursWorkedPerMonth} margin={{ top: 12, right: 12, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" strokeOpacity={0.4} vertical={false} />
+                <XAxis dataKey="month" stroke="#64748b" fontSize={12} tickLine={false} axisLine={{ stroke: "#334155", strokeOpacity: 0.4 }} />
+                <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} domain={[200, 800]} ticks={[200, 400, 600, 800]} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 10, fontSize: 13 }}
+                  labelStyle={{ color: "#fff" }}
+                  itemStyle={{ color: "#cbd5e1" }}
                 />
-                <YAxis 
-                  yAxisId="left"
-                  stroke="#666666" 
-                  fontSize={10} 
-                  tickLine={false} 
-                  axisLine={false} 
-                  tickFormatter={(value) => `$${value}`}
-                />
-                <YAxis 
-                  yAxisId="right"
-                  orientation="right"
-                  stroke="#666666" 
-                  fontSize={10} 
-                  tickLine={false} 
-                  axisLine={false} 
-                />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: '8px' }}
-                />
-                <Legend 
-                  verticalAlign="bottom" 
-                  height={36} 
-                  iconType="circle"
-                  wrapperStyle={{ paddingTop: '20px', fontSize: '10px' }}
-                />
-                <Line 
-                  yAxisId="left"
-                  type="monotone" 
-                  dataKey="revenue" 
-                  name="Revenue ($)" 
-                  stroke="#F59E0B" 
-                  strokeWidth={2} 
-                  dot={{ fill: '#F59E0B', r: 3 }} 
-                />
-                <Line 
-                  yAxisId="right"
-                  type="monotone" 
-                  dataKey="bookings" 
-                  name="Bookings" 
-                  stroke="#A2F301" 
-                  strokeWidth={2} 
-                  dot={{ fill: '#A2F301', r: 3 }} 
-                />
+                <Line type="monotone" dataKey="hours" stroke="#86efac" strokeWidth={2} dot={{ r: 4, fill: "#86efac", strokeWidth: 0 }} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </ChartCard>
       </div>
 
-      {/* Scraper Performance Report Grid */}
-      <div className="mb-8">
-        <h2 className="text-[18px] sm:text-[20px] font-bold mb-6">Scraper Performance Report</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {scraperMetrics.map((metric, idx) => (
-            <div key={idx} className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-[8px] p-6 sm:p-8 shadow-xl">
-              <p className="text-[#999999] text-[13px] sm:text-[14px] mb-2 font-medium">{metric.label}</p>
-              <h3 className={`${metric.color || 'text-white'} text-2xl sm:text-[32px] font-bold mb-1`}>{metric.value}</h3>
-              <p className="text-[#999999] text-[11px] sm:text-[12px]">{metric.subtext}</p>
-            </div>
-          ))}
-        </div>
+      {/* Charts row 2 — pie charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ChartCard title="Wage Distribution by Age Group">
+          {mounted && (
+            <ResponsiveContainer width="100%" height={320}>
+              <PieChart>
+                <Pie
+                  data={wageDistribution}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={110}
+                  stroke="none"
+                  label={(entry: { name?: string; value?: number }) =>
+                    `${entry.name}: $${(entry.value ?? 0).toLocaleString()}`
+                  }
+                  labelLine={{ stroke: "#94a3b8", strokeWidth: 1 }}
+                >
+                  {wageDistribution.map((entry) => (
+                    <Cell key={entry.name} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 10, fontSize: 13 }}
+                  itemStyle={{ color: "#cbd5e1" }}
+                  formatter={(v: number) => `$${v.toLocaleString()}`}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
+
+        <ChartCard title="Job Status Distribution">
+          {mounted && (
+            <ResponsiveContainer width="100%" height={320}>
+              <PieChart>
+                <Pie
+                  data={jobStatusDistribution}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={110}
+                  stroke="none"
+                  label={(entry: { name?: string; value?: number }) =>
+                    `${entry.name}: ${entry.value}`
+                  }
+                  labelLine={{ stroke: "#94a3b8", strokeWidth: 1 }}
+                >
+                  {jobStatusDistribution.map((entry) => (
+                    <Cell key={entry.name} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 10, fontSize: 13 }}
+                  itemStyle={{ color: "#cbd5e1" }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
       </div>
+
+      {/* Full-width line chart */}
+      <ChartCard title="User Growth (Families vs Babysitters)">
+        {mounted && (
+          <ResponsiveContainer width="100%" height={360}>
+            <LineChart data={userGrowth} margin={{ top: 12, right: 12, left: -16, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" strokeOpacity={0.4} vertical={false} />
+              <XAxis dataKey="month" stroke="#64748b" fontSize={12} tickLine={false} axisLine={{ stroke: "#334155", strokeOpacity: 0.4 }} />
+              <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} domain={[0, 260]} ticks={[0, 65, 130, 195, 260]} />
+              <Tooltip
+                contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 10, fontSize: 13 }}
+                labelStyle={{ color: "#fff" }}
+                itemStyle={{ color: "#cbd5e1" }}
+              />
+              <Legend
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: 13, color: "#cbd5e1", paddingTop: 12 }}
+              />
+              <Line type="monotone" dataKey="families" name="Families" stroke="#7dd3fc" strokeWidth={2} dot={{ r: 4, fill: "#7dd3fc", strokeWidth: 0 }} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="babysitters" name="Babysitters" stroke="#c4b5fd" strokeWidth={2} dot={{ r: 4, fill: "#c4b5fd", strokeWidth: 0 }} activeDot={{ r: 5 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </ChartCard>
+
+      {/* Certification Statistics */}
+      <section className="bg-[#1e293b]/60 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.6)]">
+        <h2 className="text-[18px] leading-[26px] font-semibold text-white mb-5">
+          Certification Statistics
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <CertStatCard label="Approval Rate" value="94%" valueColor="text-[#34d399]" caption="168 of 179 submissions" />
+          <CertStatCard label="Avg Processing Time" value="2.3 days" valueColor="text-white" caption="From submission to approval" />
+          <CertStatCard label="Most Popular Course" value="CPR" valueColor="text-[#c4b5fd]" caption="145 enrollments" />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ExportButton({ label }: { label: string }) {
+  return (
+    <button className="inline-flex items-center gap-2 px-4 h-[44px] bg-[#1e293b]/60 backdrop-blur-md border border-white/10 hover:border-white/25 text-white text-[14px] font-medium rounded-[10px] transition-all">
+      <Download className="w-4 h-4" strokeWidth={1.75} />
+      {label}
+    </button>
+  );
+}
+
+function DeltaStatCard({
+  label,
+  value,
+  delta,
+  caption,
+}: {
+  label: string;
+  value: string;
+  delta?: string;
+  caption?: string;
+}) {
+  return (
+    <div className="bg-[#1e293b]/60 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.6)]">
+      <p className="text-[13px] leading-[18px] font-medium text-[#94a3b8]">{label}</p>
+      <p className="mt-3 text-[28px] leading-[36px] font-bold text-white">{value}</p>
+      {delta && (
+        <div className="mt-2 flex items-center gap-1.5 text-[12px] text-[#34d399]">
+          <TrendingUp className="w-3.5 h-3.5" strokeWidth={2} />
+          <span>{delta}</span>
+        </div>
+      )}
+      {caption && !delta && (
+        <p className="mt-2 text-[12px] text-[#94a3b8]">{caption}</p>
+      )}
+    </div>
+  );
+}
+
+function ChartCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-[#1e293b]/60 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.6)]">
+      <h3 className="text-[16px] leading-[24px] font-semibold text-white mb-4">
+        {title}
+      </h3>
+      {children}
+    </div>
+  );
+}
+
+function CertStatCard({
+  label,
+  value,
+  valueColor,
+  caption,
+}: {
+  label: string;
+  value: string;
+  valueColor: string;
+  caption: string;
+}) {
+  return (
+    <div className="bg-[#0f172a]/60 border border-white/10 rounded-[12px] p-5">
+      <p className="text-[13px] text-[#94a3b8]">{label}</p>
+      <p className={`mt-2 text-[28px] leading-[36px] font-bold ${valueColor}`}>
+        {value}
+      </p>
+      <p className="mt-2 text-[12px] text-[#94a3b8]">{caption}</p>
     </div>
   );
 }
