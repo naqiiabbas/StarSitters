@@ -1,18 +1,37 @@
 "use client";
 
 import React, { useState } from "react";
-import { Settings as SettingsIcon, Users, ChevronDown, Save } from "lucide-react";
+import {
+  Settings as SettingsIcon,
+  Users,
+  Shield,
+  Database,
+  History,
+  ChevronDown,
+  Save,
+} from "lucide-react";
 
 type SettingsTab = "platform" | "security" | "data" | "audit";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("platform");
 
+  // Platform tab state
   const [systemNotifications, setSystemNotifications] = useState(true);
   const [autoVerification, setAutoVerification] = useState(false);
   const [minAge, setMinAge] = useState("11 years");
   const [maxDuration, setMaxDuration] = useState("8 hours");
   const [gpsTracking, setGpsTracking] = useState("Required");
+
+  // Security tab state
+  const [twoFactor, setTwoFactor] = useState(true);
+  const [sessionTimeout, setSessionTimeout] = useState("30");
+  const [loginAttempts, setLoginAttempts] = useState("5 attempts");
+
+  // Data tab state
+  const [retentionMonths, setRetentionMonths] = useState("24");
+  const [autoCleanup, setAutoCleanup] = useState("Enabled");
+  const [backupFrequency, setBackupFrequency] = useState("Daily");
 
   return (
     <div className="space-y-6">
@@ -50,28 +69,15 @@ export default function SettingsPage() {
         />
       </div>
 
-      {/* Platform tab content */}
+      {/* Platform tab */}
       {activeTab === "platform" && (
         <div className="space-y-6">
-          {/* Platform Rules card */}
-          <section className="bg-[#1e293b]/60 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.6)]">
-            <div className="flex items-start gap-3 mb-6">
-              <div className="flex-shrink-0 w-10 h-10 rounded-[10px] bg-[#b8e0f0]/10 border border-[#b8e0f0]/20 flex items-center justify-center">
-                <SettingsIcon
-                  className="w-[18px] h-[18px] text-[#b8e0f0]"
-                  strokeWidth={1.75}
-                />
-              </div>
-              <div>
-                <h2 className="text-[18px] leading-[26px] font-semibold text-white">
-                  Platform Rules
-                </h2>
-                <p className="mt-0.5 text-[14px] text-[#94a3b8]">
-                  Configure general platform behavior and rules
-                </p>
-              </div>
-            </div>
-
+          <SectionCard
+            iconColor="cyan"
+            icon={SettingsIcon}
+            title="Platform Rules"
+            description="Configure general platform behavior and rules"
+          >
             <div className="space-y-3">
               <ToggleSetting
                 title="System Notifications"
@@ -107,37 +113,15 @@ export default function SettingsPage() {
                 options={["Required", "Optional", "Disabled"]}
               />
             </div>
+            <SaveButton label="Save Platform Settings" />
+          </SectionCard>
 
-            <div className="mt-6">
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 h-[44px] px-5 bg-[#86efac] hover:bg-[#6ee7b7] text-[#064e3b] text-[14px] font-semibold rounded-[10px] transition-all"
-              >
-                <Save className="w-[16px] h-[16px]" strokeWidth={2.25} />
-                Save Platform Settings
-              </button>
-            </div>
-          </section>
-
-          {/* Role-Based Access Control card */}
-          <section className="bg-[#1e293b]/60 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.6)]">
-            <div className="flex items-start gap-3 mb-6">
-              <div className="flex-shrink-0 w-10 h-10 rounded-[10px] bg-[#a78bfa]/10 border border-[#a78bfa]/20 flex items-center justify-center">
-                <Users
-                  className="w-[18px] h-[18px] text-[#c4b5fd]"
-                  strokeWidth={1.75}
-                />
-              </div>
-              <div>
-                <h2 className="text-[18px] leading-[26px] font-semibold text-white">
-                  Role-Based Access Control
-                </h2>
-                <p className="mt-0.5 text-[14px] text-[#94a3b8]">
-                  Manage admin roles and permissions
-                </p>
-              </div>
-            </div>
-
+          <SectionCard
+            iconColor="purple"
+            icon={Users}
+            title="Role-Based Access Control"
+            description="Manage admin roles and permissions"
+          >
             <div className="space-y-3">
               <RoleRow
                 name="Super Admin"
@@ -146,26 +130,140 @@ export default function SettingsPage() {
                 activeCount={1}
               />
             </div>
-          </section>
+          </SectionCard>
         </div>
       )}
 
-      {/* Other tabs — placeholder until UI provided */}
-      {activeTab !== "platform" && (
-        <section className="bg-[#1e293b]/60 backdrop-blur-md border border-white/10 rounded-2xl p-12 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.6)] text-center">
-          <p className="text-[15px] text-[#94a3b8]">
-            {tabLabel(activeTab)} settings — UI coming soon.
-          </p>
-        </section>
+      {/* Security tab */}
+      {activeTab === "security" && (
+        <div className="space-y-6">
+          <SectionCard
+            iconColor="green"
+            icon={Shield}
+            title="Security Settings"
+            description="Configure security policies and authentication"
+          >
+            <div className="space-y-3">
+              <ToggleSetting
+                title="Two-Factor Authentication"
+                description="Require 2FA for all admin accounts"
+                checked={twoFactor}
+                onChange={setTwoFactor}
+              />
+              <NumberWithSuffixSetting
+                title="Session Timeout"
+                value={sessionTimeout}
+                onChange={setSessionTimeout}
+                suffix="minutes of inactivity"
+                description="Auto-logout after specified time"
+              />
+              <PasswordPolicySetting
+                items={[
+                  "Minimum 8 characters",
+                  "Require uppercase and lowercase",
+                  "Require numbers and special characters",
+                  "Password expiry: 90 days",
+                ]}
+              />
+              <SelectSetting
+                title="Login Attempt Limits"
+                description="Lock account after failed attempts"
+                value={loginAttempts}
+                onChange={setLoginAttempts}
+                options={["3 attempts", "5 attempts", "10 attempts"]}
+              />
+            </div>
+            <SaveButton label="Save Security Settings" />
+          </SectionCard>
+        </div>
+      )}
+
+      {/* Data tab */}
+      {activeTab === "data" && (
+        <div className="space-y-6">
+          <SectionCard
+            iconColor="purple"
+            icon={Database}
+            title="Data Management"
+            description="Configure data retention and privacy policies"
+          >
+            <div className="space-y-3">
+              <NumberWithSuffixSetting
+                title="Data Retention Period"
+                value={retentionMonths}
+                onChange={setRetentionMonths}
+                suffix="months"
+                description="How long to retain user data after account deletion"
+              />
+              <SelectSetting
+                title="Automated Data Cleanup"
+                description="Automatically delete data after retention period"
+                value={autoCleanup}
+                onChange={setAutoCleanup}
+                options={["Enabled", "Disabled"]}
+              />
+              <SelectSetting
+                title="Backup Frequency"
+                description="Automated database backup schedule"
+                value={backupFrequency}
+                onChange={setBackupFrequency}
+                options={["Hourly", "Daily", "Weekly", "Monthly"]}
+              />
+              <EncryptionStatusBlock
+                rows={[
+                  { label: "Data at Rest", status: "Encrypted" },
+                  { label: "Data in Transit", status: "SSL/TLS" },
+                  { label: "Payment Data", status: "PCI Compliant" },
+                ]}
+              />
+            </div>
+            <SaveButton label="Save Data Settings" />
+          </SectionCard>
+        </div>
+      )}
+
+      {/* Audit Log tab */}
+      {activeTab === "audit" && (
+        <div className="space-y-6">
+          <SectionCard
+            iconColor="blue"
+            icon={History}
+            title="Audit Log"
+            description="Complete history of administrative actions"
+          >
+            <AuditLogTable
+              rows={[
+                {
+                  timestamp: "2024-02-24 15:30",
+                  admin: "Admin User",
+                  action: "Updated wage configuration for age 15-17",
+                  category: "Configuration",
+                },
+                {
+                  timestamp: "2024-02-24 10:15",
+                  admin: "Admin User",
+                  action: "Approved family verification for Johnson Family",
+                  category: "Verification",
+                },
+                {
+                  timestamp: "2024-02-23 16:45",
+                  admin: "Admin User",
+                  action: "Changed data retention policy to 24 months",
+                  category: "Security",
+                },
+                {
+                  timestamp: "2024-02-23 14:20",
+                  admin: "Admin User",
+                  action: "Approved certification for Emma Martinez",
+                  category: "Certification",
+                },
+              ]}
+            />
+          </SectionCard>
+        </div>
       )}
     </div>
   );
-}
-
-function tabLabel(tab: SettingsTab): string {
-  if (tab === "security") return "Security";
-  if (tab === "data") return "Data";
-  return "Audit Log";
 }
 
 function TabButton({
@@ -189,6 +287,82 @@ function TabButton({
     >
       {label}
     </button>
+  );
+}
+
+type IconAccent = "cyan" | "purple" | "green" | "blue";
+
+const accentMap: Record<
+  IconAccent,
+  { bg: string; border: string; text: string }
+> = {
+  cyan: {
+    bg: "bg-[#b8e0f0]/10",
+    border: "border-[#b8e0f0]/20",
+    text: "text-[#b8e0f0]",
+  },
+  purple: {
+    bg: "bg-[#a78bfa]/10",
+    border: "border-[#a78bfa]/20",
+    text: "text-[#c4b5fd]",
+  },
+  green: {
+    bg: "bg-[#86efac]/10",
+    border: "border-[#86efac]/20",
+    text: "text-[#86efac]",
+  },
+  blue: {
+    bg: "bg-[#3b82f6]/10",
+    border: "border-[#3b82f6]/20",
+    text: "text-[#60a5fa]",
+  },
+};
+
+function SectionCard({
+  icon: Icon,
+  iconColor,
+  title,
+  description,
+  children,
+}: {
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  iconColor: IconAccent;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  const accent = accentMap[iconColor];
+  return (
+    <section className="bg-[#1e293b]/60 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.6)]">
+      <div className="flex items-start gap-3 mb-6">
+        <div
+          className={`flex-shrink-0 w-10 h-10 rounded-[10px] ${accent.bg} border ${accent.border} flex items-center justify-center`}
+        >
+          <Icon className={`w-[18px] h-[18px] ${accent.text}`} strokeWidth={1.75} />
+        </div>
+        <div>
+          <h2 className="text-[18px] leading-[26px] font-semibold text-white">
+            {title}
+          </h2>
+          <p className="mt-0.5 text-[14px] text-[#94a3b8]">{description}</p>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function SaveButton({ label }: { label: string }) {
+  return (
+    <div className="mt-6">
+      <button
+        type="button"
+        className="inline-flex items-center gap-2 h-[44px] px-5 bg-[#86efac] hover:bg-[#6ee7b7] text-[#064e3b] text-[14px] font-semibold rounded-[10px] transition-all"
+      >
+        <Save className="w-[16px] h-[16px]" strokeWidth={2.25} />
+        {label}
+      </button>
+    </div>
   );
 }
 
@@ -263,6 +437,77 @@ function SelectSetting({
   );
 }
 
+function NumberWithSuffixSetting({
+  title,
+  value,
+  onChange,
+  suffix,
+  description,
+}: {
+  title: string;
+  value: string;
+  onChange: (next: string) => void;
+  suffix: string;
+  description: string;
+}) {
+  return (
+    <div className="bg-[#0f172a]/60 border border-white/10 rounded-[12px] px-5 py-4">
+      <p className="text-[15px] font-medium text-white mb-3">{title}</p>
+      <div className="flex items-center gap-3">
+        <input
+          type="number"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-[120px] h-[44px] bg-[#0f172a]/80 border border-[#334155]/60 rounded-[10px] px-4 text-[14px] text-white focus:outline-none focus:border-[#b8e0f0]/60 focus:ring-2 focus:ring-[#b8e0f0]/15 transition-all"
+        />
+        <span className="text-[14px] text-[#cbd5e1]">{suffix}</span>
+      </div>
+      <p className="mt-3 text-[13px] text-[#94a3b8]">{description}</p>
+    </div>
+  );
+}
+
+function PasswordPolicySetting({ items }: { items: string[] }) {
+  return (
+    <div className="bg-[#0f172a]/60 border border-white/10 rounded-[12px] px-5 py-4">
+      <p className="text-[15px] font-medium text-white mb-3">Password Policy</p>
+      <ul className="space-y-2">
+        {items.map((item) => (
+          <li key={item} className="flex items-center gap-2.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#86efac] flex-shrink-0" />
+            <span className="text-[14px] text-[#cbd5e1]">{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function EncryptionStatusBlock({
+  rows,
+}: {
+  rows: { label: string; status: string }[];
+}) {
+  return (
+    <div className="bg-[#0f172a]/60 border border-white/10 rounded-[12px] px-5 py-4">
+      <p className="text-[15px] font-medium text-white mb-3">Encryption Status</p>
+      <div className="space-y-2.5">
+        {rows.map((row) => (
+          <div
+            key={row.label}
+            className="flex items-center justify-between gap-4"
+          >
+            <span className="text-[14px] text-[#cbd5e1]">{row.label}</span>
+            <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-[#86efac]/15 border border-[#86efac]/30 text-[#86efac] text-[12px] font-medium">
+              {row.status}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function RoleRow({
   name,
   description,
@@ -284,6 +529,63 @@ function RoleRow({
       <span className="flex-shrink-0 inline-flex items-center px-2.5 py-1 rounded-md bg-[#86efac]/15 border border-[#86efac]/30 text-[#86efac] text-[12px] font-medium">
         {activeCount} Active
       </span>
+    </div>
+  );
+}
+
+interface AuditLogRow {
+  timestamp: string;
+  admin: string;
+  action: string;
+  category: string;
+}
+
+function AuditLogTable({ rows }: { rows: AuditLogRow[] }) {
+  return (
+    <div className="bg-[#0f172a]/60 border border-white/10 rounded-[12px] overflow-hidden">
+      <div className="overflow-x-auto custom-scrollbar">
+        <table className="w-full min-w-[760px]">
+          <thead>
+            <tr className="border-b border-[#334155]/50">
+              <th className="text-[13px] font-medium text-[#94a3b8] py-3 px-5 text-left">
+                Timestamp
+              </th>
+              <th className="text-[13px] font-medium text-[#94a3b8] py-3 px-5 text-left">
+                Admin
+              </th>
+              <th className="text-[13px] font-medium text-[#94a3b8] py-3 px-5 text-left">
+                Action
+              </th>
+              <th className="text-[13px] font-medium text-[#94a3b8] py-3 px-5 text-left">
+                Category
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => (
+              <tr
+                key={idx}
+                className="border-b border-[#334155]/30 last:border-0"
+              >
+                <td className="py-4 px-5 text-[14px] text-white whitespace-nowrap">
+                  {row.timestamp}
+                </td>
+                <td className="py-4 px-5 text-[14px] text-white whitespace-nowrap">
+                  {row.admin}
+                </td>
+                <td className="py-4 px-5 text-[14px] text-[#cbd5e1]">
+                  {row.action}
+                </td>
+                <td className="py-4 px-5">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-[#cbd5e1] text-[12px] font-medium">
+                    {row.category}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
