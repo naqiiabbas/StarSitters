@@ -1,6 +1,59 @@
 "use client";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { OnboardingDetails } from "@/components/ui/OnboardingDetailsModal";
 import { createClient } from "./client";
+
+const BATCH_IN = 120;
+
+function uniqueIds(ids: string[]): string[] {
+  return [...new Set(ids.filter(Boolean))];
+}
+
+type UserRow = {
+  id: string;
+  full_name: string | null;
+  email: string;
+  created_at?: string;
+  role?: string;
+};
+
+async function fetchUsersByIds(
+  supabase: SupabaseClient,
+  ids: string[],
+): Promise<Map<string, UserRow>> {
+  const map = new Map<string, UserRow>();
+  const list = uniqueIds(ids);
+  for (let i = 0; i < list.length; i += BATCH_IN) {
+    const chunk = list.slice(i, i + BATCH_IN);
+    const { data, error } = await supabase
+      .from("users")
+      .select("id, full_name, email, created_at, role")
+      .in("id", chunk);
+    if (error) throw error;
+    for (const u of (data ?? []) as UserRow[]) {
+      map.set(u.id, u);
+    }
+  }
+  return map;
+}
+
+async function fetchCoursesByIds(
+  supabase: SupabaseClient,
+  ids: string[],
+): Promise<Map<string, { id: string; name: string }>> {
+  const map = new Map<string, { id: string; name: string }>();
+  const list = uniqueIds(ids);
+  for (let i = 0; i < list.length; i += BATCH_IN) {
+    const chunk = list.slice(i, i + BATCH_IN);
+    const { data, error } = await supabase.from("courses").select("id, name").in("id", chunk);
+    if (error) throw error;
+    for (const c of (data ?? []) as { id: string; name: string }[]) {
+      map.set(c.id, c);
+    }
+  }
+  return map;
+}
 
 export type DashboardStats = {
   families_total: number;
@@ -87,49 +140,39 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
 
 export async function fetchFamilies(): Promise<FamilyRow[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const { data: profiles, error } = await supabase
     .from("family_profiles")
-    .select(
-      "user_id, bg_check_status, rejection_reason, home_address, users:user_id ( full_name, email, created_at )",
-    )
-    .order("user_id", { ascending: false });
+    .select("user_id, bg_check_status, rejection_reason, home_address");
   if (error) throw error;
-
-  type FamilyRowRaw = {
+  const rows = (profiles ?? []) as {
     user_id: string;
     bg_check_status: FamilyRow["bg_check_status"];
     rejection_reason: string | null;
     home_address: unknown;
-    users:
-      | { full_name: string | null; email: string; created_at: string }
-      | { full_name: string | null; email: string; created_at: string }[]
-      | null;
-  };
-  const rows = ((data ?? []) as unknown) as FamilyRowRaw[];
+  }[];
+  if (rows.length === 0) return [];
 
-  const userOf = (
-    u: FamilyRowRaw["users"],
-  ): { full_name: string | null; email: string; created_at: string } | null => {
-    if (Array.isArray(u)) return u[0] ?? null;
-    return u ?? null;
-  };
+  rows.sort((a, b) => (a.user_id < b.user_id ? 1 : a.user_id > b.user_id ? -1 : 0));
 
-  const ids = rows.map((r) => r.user_id);
-  let activeJobsByFamily: Record<string, number> = {};
-  if (ids.length > 0) {
-    const { data: jobs } = await supabase
+  const userMap = await fetchUsersByIds(supabase, rows.map((r) => r.user_id));
+
+  const familyIds = rows.map((r) => r.user_id);
+  const activeJobsByFamily: Record<string, number> = {};
+  for (let i = 0; i < familyIds.length; i += BATCH_IN) {
+    const chunk = familyIds.slice(i, i + BATCH_IN);
+    const { data: jobs, error: jerr } = await supabase
       .from("jobs")
       .select("family_id, status")
-      .in("family_id", ids);
-    activeJobsByFamily = (jobs ?? []).reduce<Record<string, number>>((acc, j) => {
+      .in("family_id", chunk);
+    if (jerr) throw jerr;
+    for (const j of (jobs ?? []) as { family_id: string; status: string }[]) {
       const isActive = j.status === "open" || j.status === "hired" || j.status === "active";
-      if (isActive) acc[j.family_id] = (acc[j.family_id] ?? 0) + 1;
-      return acc;
-    }, {});
+      if (isActive) activeJobsByFamily[j.family_id] = (activeJobsByFamily[j.family_id] ?? 0) + 1;
+    }
   }
 
   return rows.map((r) => {
-    const u = userOf(r.users);
+    const u = userMap.get(r.user_id);
     let addressText: string | null = null;
     const addr = r.home_address;
     if (addr && typeof addr === "object" && !Array.isArray(addr)) {
@@ -157,15 +200,13 @@ export async function fetchFamilies(): Promise<FamilyRow[]> {
 
 export async function fetchSitters(): Promise<SitterRow[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const { data: profiles, error } = await supabase
     .from("sitter_profiles")
     .select(
-      "user_id, date_of_birth, is_active, guardian_consent_status, suspension_reason, total_minutes_worked, total_earnings, users:user_id ( full_name, email, created_at )",
-    )
-    .order("user_id", { ascending: false });
+      "user_id, date_of_birth, is_active, guardian_consent_status, suspension_reason, total_minutes_worked, total_earnings",
+    );
   if (error) throw error;
-
-  type SitterRowRaw = {
+  const rows = (profiles ?? []) as {
     user_id: string;
     date_of_birth: string;
     is_active: boolean;
@@ -173,22 +214,15 @@ export async function fetchSitters(): Promise<SitterRow[]> {
     suspension_reason: string | null;
     total_minutes_worked: number;
     total_earnings: number | string;
-    users:
-      | { full_name: string | null; email: string; created_at: string }
-      | { full_name: string | null; email: string; created_at: string }[]
-      | null;
-  };
-  const rows = ((data ?? []) as unknown) as SitterRowRaw[];
+  }[];
+  if (rows.length === 0) return [];
 
-  const userOf = (
-    u: SitterRowRaw["users"],
-  ): { full_name: string | null; email: string; created_at: string } | null => {
-    if (Array.isArray(u)) return u[0] ?? null;
-    return u ?? null;
-  };
+  rows.sort((a, b) => (a.user_id < b.user_id ? 1 : a.user_id > b.user_id ? -1 : 0));
+
+  const userMap = await fetchUsersByIds(supabase, rows.map((r) => r.user_id));
 
   return rows.map((r) => {
-    const u = userOf(r.users);
+    const u = userMap.get(r.user_id);
     return {
       user_id: r.user_id,
       full_name: u?.full_name ?? null,
@@ -227,7 +261,7 @@ export async function fetchDisputes(): Promise<DisputeRow[]> {
   const { data, error } = await supabase
     .from("disputes")
     .select(
-      "id, job_id, reported_by_user_id, reported_by_role, issue_type, description, priority, status, resolution_notes, resolved_at, created_at, reporter:reported_by_user_id ( full_name, email )",
+      "id, job_id, reported_by_user_id, reported_by_role, issue_type, description, priority, status, resolution_notes, resolved_at, created_at",
     )
     .order("created_at", { ascending: false })
     .limit(100);
@@ -245,22 +279,17 @@ export async function fetchDisputes(): Promise<DisputeRow[]> {
     resolution_notes: string | null;
     resolved_at: string | null;
     created_at: string;
-    reporter:
-      | { full_name: string | null; email: string }
-      | { full_name: string | null; email: string }[]
-      | null;
   };
   const rows = ((data ?? []) as unknown) as DisputeRowRaw[];
+  if (rows.length === 0) return [];
 
-  const reporterOf = (
-    r: DisputeRowRaw["reporter"],
-  ): { full_name: string | null; email: string } | null => {
-    if (Array.isArray(r)) return r[0] ?? null;
-    return r ?? null;
-  };
+  const userMap = await fetchUsersByIds(
+    supabase,
+    rows.map((d) => d.reported_by_user_id),
+  );
 
   return rows.map((d) => {
-    const rep = reporterOf(d.reporter);
+    const rep = userMap.get(d.reported_by_user_id);
     return {
       id: d.id,
       job_id: d.job_id,
@@ -373,6 +402,118 @@ export async function fetchRegistrationTrend(): Promise<RegistrationTrendRow[]> 
   }));
 }
 
+/** Monthly sum of sitter `earning` ledger rows (matches Reports revenue window logic). */
+export async function fetchReportRevenuePerMonth(
+  pMonths: number,
+): Promise<{ month: string; revenue: number }[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("admin_report_revenue_per_month", {
+    p_months: pMonths,
+  });
+  if (error) throw error;
+  const rows = (data ?? []) as {
+    month_label?: string;
+    revenue?: number | string;
+  }[];
+  return rows.map((r) => ({
+    month: String(r.month_label ?? ""),
+    revenue: typeof r.revenue === "string" ? parseFloat(r.revenue) : Number(r.revenue ?? 0),
+  }));
+}
+
+function unwrapRpcJsonbRow(raw: unknown): Record<string, unknown> {
+  let v: unknown = raw;
+  if (typeof v === "string") {
+    try {
+      v = JSON.parse(v) as unknown;
+    } catch {
+      return {};
+    }
+  }
+  if (!v || typeof v !== "object") return {};
+  const r = v as Record<string, unknown>;
+  const vals = Object.values(r);
+  if (
+    vals.length === 1 &&
+    vals[0] &&
+    typeof vals[0] === "object" &&
+    !Array.isArray(vals[0])
+  ) {
+    return vals[0] as Record<string, unknown>;
+  }
+  return r;
+}
+
+export type RecentOnboardingRow = {
+  type: "Family" | "Babysitter";
+  name: string;
+  email: string;
+  date: string;
+  status: "Verified" | "Pending";
+  details: OnboardingDetails;
+};
+
+/** Latest family + sitter signups (RPC `admin_recent_onboarding`). */
+export async function fetchRecentOnboarding(limit = 25): Promise<RecentOnboardingRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("admin_recent_onboarding", { p_limit: limit });
+  if (error) throw error;
+  const list = (data ?? []) as unknown[];
+  const out: RecentOnboardingRow[] = [];
+  for (const raw of list) {
+    const o = unwrapRpcJsonbRow(raw);
+    const t = o.type === "Babysitter" ? "Babysitter" : "Family";
+    const st = o.status === "Verified" ? "Verified" : "Pending";
+    const details = o.details;
+    if (!details || typeof details !== "object") continue;
+    const d = details as Record<string, unknown>;
+    if (t === "Family" && d.type === "Family") {
+      out.push({
+        type: "Family",
+        name: String(o.name ?? ""),
+        email: String(o.email ?? ""),
+        date: String(o.date ?? ""),
+        status: st,
+        details: {
+          type: "Family",
+          name: String(d.name ?? o.name ?? ""),
+          registeredOn: String(d.registeredOn ?? o.date ?? ""),
+          status: d.status === "Verified" ? "Verified" : "Pending",
+          email: String(d.email ?? ""),
+          phone: String(d.phone ?? "—"),
+          address: String(d.address ?? "—"),
+          numberOfChildren: Number(d.numberOfChildren ?? 0),
+          childrenAges: String(d.childrenAges ?? "—"),
+          backgroundCheck: String(d.backgroundCheck ?? "—"),
+          preferredRate: String(d.preferredRate ?? "—"),
+        },
+      });
+    } else if (t === "Babysitter" && d.type === "Babysitter") {
+      out.push({
+        type: "Babysitter",
+        name: String(o.name ?? ""),
+        email: String(o.email ?? ""),
+        date: String(o.date ?? ""),
+        status: st,
+        details: {
+          type: "Babysitter",
+          name: String(d.name ?? o.name ?? ""),
+          registeredOn: String(d.registeredOn ?? o.date ?? ""),
+          status: d.status === "Verified" ? "Verified" : "Pending",
+          email: String(d.email ?? ""),
+          phone: String(d.phone ?? "—"),
+          address: String(d.address ?? "—"),
+          yearsOfExperience: Number(d.yearsOfExperience ?? 0),
+          ageGroups: String(d.ageGroups ?? "—"),
+          backgroundCheck: String(d.backgroundCheck ?? "—"),
+          hourlyRate: String(d.hourlyRate ?? "—"),
+        },
+      });
+    }
+  }
+  return out;
+}
+
 export type NotificationLogRow = {
   id: string;
   user_id: string;
@@ -388,11 +529,25 @@ export async function fetchNotificationLogs(limit = 500): Promise<NotificationLo
   const supabase = createClient();
   const { data, error } = await supabase
     .from("notifications")
-    .select("id, user_id, type, title, body, created_at, delivery_status, users:user_id ( email, role )")
+    .select("id, user_id, type, title, body, created_at, delivery_status")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return (data ?? []) as NotificationLogRow[];
+  const rows = (data ?? []) as Omit<NotificationLogRow, "users">[];
+  if (rows.length === 0) return [];
+
+  const userMap = await fetchUsersByIds(supabase, rows.map((r) => r.user_id));
+
+  return rows.map((r) => {
+    const u = userMap.get(r.user_id);
+    return {
+      ...r,
+      users:
+        u && u.email
+          ? { email: u.email, role: String(u.role ?? "family") }
+          : null,
+    };
+  });
 }
 
 export async function approveCertificationSubmission(
@@ -461,11 +616,33 @@ export async function fetchAuditLogs(limit = 100): Promise<AuditLogAdminRow[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("audit_logs")
-    .select("id, created_at, action, entity_type, actor:actor_id ( email, full_name )")
+    .select("id, created_at, action, entity_type, actor_id")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return (data ?? []) as AuditLogAdminRow[];
+  type Raw = {
+    id: string;
+    created_at: string;
+    action: string;
+    entity_type: string | null;
+    actor_id: string | null;
+  };
+  const rows = (data ?? []) as Raw[];
+  if (rows.length === 0) return [];
+
+  const actorIds = rows.map((r) => r.actor_id).filter((id): id is string => id != null);
+  const userMap = await fetchUsersByIds(supabase, actorIds);
+
+  return rows.map((r) => {
+    const a = r.actor_id ? userMap.get(r.actor_id) : null;
+    return {
+      id: r.id,
+      created_at: r.created_at,
+      action: r.action,
+      entity_type: r.entity_type,
+      actor: a ? { email: a.email, full_name: a.full_name } : null,
+    };
+  });
 }
 
 function num(v: unknown, fallback = 0): number {
@@ -743,10 +920,49 @@ export async function fetchCertificationSubmissionsAdmin(): Promise<Certificatio
   const { data, error } = await supabase
     .from("certification_submissions")
     .select(
-      "id, course_id, sitter_id, score, questions_answered, correct_answers, time_taken_seconds, status, submitted_at, sitter:sitter_id ( full_name, email ), course:course_id ( name )",
+      "id, course_id, sitter_id, score, questions_answered, correct_answers, time_taken_seconds, status, submitted_at",
     )
     .order("submitted_at", { ascending: false })
     .limit(200);
   if (error) throw error;
-  return (data ?? []) as CertificationSubmissionRow[];
+
+  type RawRow = {
+    id: string;
+    course_id: string;
+    sitter_id: string;
+    score: number | null;
+    questions_answered: number | null;
+    correct_answers: number | null;
+    time_taken_seconds: number | null;
+    status: CertificationSubmissionRow["status"];
+    submitted_at: string;
+  };
+
+  const rows = (data ?? []) as unknown as RawRow[];
+  if (rows.length === 0) return [];
+
+  const userMap = await fetchUsersByIds(supabase, rows.map((r) => r.sitter_id));
+  const courseMap = await fetchCoursesByIds(supabase, rows.map((r) => r.course_id));
+
+  return rows.map((r) => {
+    const u = userMap.get(r.sitter_id);
+    const sitter: CertificationSubmissionRow["sitter"] = u
+      ? { full_name: u.full_name, email: u.email }
+      : null;
+    const c = courseMap.get(r.course_id);
+    const course: CertificationSubmissionRow["course"] = c ? { name: c.name } : null;
+    return {
+      id: r.id,
+      course_id: r.course_id,
+      sitter_id: r.sitter_id,
+      score: r.score,
+      questions_answered: r.questions_answered,
+      correct_answers: r.correct_answers,
+      time_taken_seconds: r.time_taken_seconds,
+      status: r.status,
+      submitted_at: r.submitted_at,
+      sitter,
+      course,
+    };
+  });
 }

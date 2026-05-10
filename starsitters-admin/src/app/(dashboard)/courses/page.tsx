@@ -23,6 +23,7 @@ import {
   fetchAdminCoursesWithStats,
   type AdminCourseWithStats,
 } from "@/lib/supabase/admin";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 import {
   ViewCourseModal,
   type ViewCourseData,
@@ -143,7 +144,7 @@ export default function CoursesPage() {
       const rows = await fetchAdminCoursesWithStats();
       setCourses(rows.map(mapRowToCourse));
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : "Failed to load courses");
+      setLoadError(formatSupabaseError(e));
       setCourses([]);
     } finally {
       setLoading(false);
@@ -179,7 +180,7 @@ export default function CoursesPage() {
       setViewTarget((vt) => (vt && vt.id === id ? merged : vt));
       setEditTarget((et) => (et && et.id === id ? merged : et));
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : "Update failed");
+      setLoadError(formatSupabaseError(e));
     }
   };
 
@@ -204,7 +205,7 @@ export default function CoursesPage() {
       await adminDeleteCourse(id);
       await refresh();
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : "Delete failed");
+      setLoadError(formatSupabaseError(e));
     }
   };
 

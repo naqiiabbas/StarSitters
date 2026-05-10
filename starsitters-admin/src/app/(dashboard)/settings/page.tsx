@@ -8,6 +8,7 @@ import {
   type AuditLogAdminRow,
   type SystemConfigRow,
 } from "@/lib/supabase/admin";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 import {
   Settings as SettingsIcon,
   Users,
@@ -47,8 +48,10 @@ export default function SettingsPage() {
   const [configLoading, setConfigLoading] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
   const [saveBusy, setSaveBusy] = useState<string | null>(null);
+  const [saveOkMessage, setSaveOkMessage] = useState<string | null>(null);
   const [auditRows, setAuditRows] = useState<AuditLogAdminRow[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
 
   // Platform tab state
   const [systemNotifications, setSystemNotifications] = useState(true);
@@ -99,7 +102,7 @@ export default function SettingsPage() {
         const rows = await fetchSystemConfigRows();
         if (!cancelled) applyConfigRows(rows);
       } catch (e) {
-        if (!cancelled) setConfigError(e instanceof Error ? e.message : "Failed to load settings");
+        if (!cancelled) setConfigError(formatSupabaseError(e));
       } finally {
         if (!cancelled) setConfigLoading(false);
       }
@@ -110,15 +113,23 @@ export default function SettingsPage() {
   }, [applyConfigRows]);
 
   useEffect(() => {
+    setSaveOkMessage(null);
+  }, [activeTab]);
+
+  useEffect(() => {
     if (activeTab !== "audit") return;
     let cancelled = false;
     (async () => {
       setAuditLoading(true);
+      setAuditError(null);
       try {
         const rows = await fetchAuditLogs(100);
         if (!cancelled) setAuditRows(rows);
-      } catch {
-        if (!cancelled) setAuditRows([]);
+      } catch (e) {
+        if (!cancelled) {
+          setAuditRows([]);
+          setAuditError(formatSupabaseError(e));
+        }
       } finally {
         if (!cancelled) setAuditLoading(false);
       }
@@ -130,6 +141,8 @@ export default function SettingsPage() {
 
   const savePlatform = async () => {
     setSaveBusy("platform");
+    setConfigError(null);
+    setSaveOkMessage(null);
     try {
       const minY = parseInt(minAge, 10);
       const maxH = parseInt(maxDuration, 10);
@@ -146,6 +159,11 @@ export default function SettingsPage() {
         max_job_duration_hours: Number.isFinite(maxH) ? maxH : 8,
         gps_tracking_mode: gps,
       });
+      const rows = await fetchSystemConfigRows();
+      applyConfigRows(rows);
+      setSaveOkMessage("Platform settings saved.");
+    } catch (e) {
+      setConfigError(formatSupabaseError(e));
     } finally {
       setSaveBusy(null);
     }
@@ -153,6 +171,8 @@ export default function SettingsPage() {
 
   const saveSecurity = async () => {
     setSaveBusy("security");
+    setConfigError(null);
+    setSaveOkMessage(null);
     try {
       const attempts = parseInt(loginAttempts, 10);
       await adminUpdateSystemConfig({
@@ -160,6 +180,11 @@ export default function SettingsPage() {
         session_timeout_minutes: parseInt(sessionTimeout, 10) || 30,
         max_login_attempts: Number.isFinite(attempts) ? attempts : 5,
       });
+      const rows = await fetchSystemConfigRows();
+      applyConfigRows(rows);
+      setSaveOkMessage("Security settings saved.");
+    } catch (e) {
+      setConfigError(formatSupabaseError(e));
     } finally {
       setSaveBusy(null);
     }
@@ -167,6 +192,8 @@ export default function SettingsPage() {
 
   const saveData = async () => {
     setSaveBusy("data");
+    setConfigError(null);
+    setSaveOkMessage(null);
     try {
       const months = parseInt(retentionMonths, 10) || 24;
       await adminUpdateSystemConfig({
@@ -174,6 +201,11 @@ export default function SettingsPage() {
         data_auto_cleanup_enabled: autoCleanup === "Enabled",
         backup_frequency: backupFrequency,
       });
+      const rows = await fetchSystemConfigRows();
+      applyConfigRows(rows);
+      setSaveOkMessage("Data settings saved.");
+    } catch (e) {
+      setConfigError(formatSupabaseError(e));
     } finally {
       setSaveBusy(null);
     }
@@ -195,6 +227,11 @@ export default function SettingsPage() {
         {configError && (
           <p className="mt-2 text-[13px] text-red-400" role="alert">
             {configError}
+          </p>
+        )}
+        {saveOkMessage && !configError && (
+          <p className="mt-2 text-[13px] text-[#86efac]" role="status">
+            {saveOkMessage}
           </p>
         )}
       </div>
@@ -397,7 +434,11 @@ export default function SettingsPage() {
             title="Audit Log"
             description="Complete history of administrative actions"
           >
-            {auditLoading ? (
+            {auditError ? (
+              <p className="text-[14px] text-red-400" role="alert">
+                {auditError}
+              </p>
+            ) : auditLoading ? (
               <p className="text-[14px] text-[#94a3b8]">Loading audit log…</p>
             ) : (
               <AuditLogTable rows={auditRows} />

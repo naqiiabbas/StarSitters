@@ -6,6 +6,7 @@ import {
   fetchNotificationLogs,
   type NotificationLogRow,
 } from "@/lib/supabase/admin";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 
 type NotificationRole = "Family" | "Babysitter";
 type NotificationStatus = "Delivered" | "Sent" | "Failed";
@@ -65,7 +66,7 @@ export default function NotificationsPage() {
         setLoadError(null);
       } catch (e) {
         if (cancelled) return;
-        setLoadError(e instanceof Error ? e.message : String(e));
+        setLoadError(formatSupabaseError(e));
       }
     })();
     return () => {

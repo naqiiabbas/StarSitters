@@ -1,5 +1,11 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Star Sitters admin (Supabase)
+
+- Copy `.env.local.example` → `.env.local` and set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` (see example file).
+- From the **PIXORAFT1** workspace root, `scripts/dev-web.sh` will create `.env.local` if missing and merge keys from `starsitters-backend/.env` when present.
+- First admin user: see repo-root `RUN_LOCAL.md` § “Provision the first admin” (SQL must use `set_config('app.bypass_immutability','true',true)` before changing `users.role`).
+
 ## Getting Started
 
 First, run the development server:

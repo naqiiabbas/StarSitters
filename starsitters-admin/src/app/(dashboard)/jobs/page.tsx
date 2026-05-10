@@ -15,6 +15,7 @@ import {
   type TimelineEventKind,
 } from "@/components/ui/JobDetailsModal";
 import { fetchJobs, type JobRow } from "@/lib/supabase/admin";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 
 interface Job {
   id: string;
@@ -141,7 +142,7 @@ export default function JobsMonitoringPage() {
         if (!cancelled) setJobs(rows.map(rowToJob));
       } catch (e) {
         if (!cancelled)
-          setErrorMessage(e instanceof Error ? e.message : "Failed to load jobs");
+          setErrorMessage(formatSupabaseError(e));
       } finally {
         if (!cancelled) setLoading(false);
       }

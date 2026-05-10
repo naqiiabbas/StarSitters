@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Users,
   UserCheck,
@@ -26,193 +26,16 @@ import {
 } from "@/components/ui/OnboardingDetailsModal";
 import {
   fetchDashboardStats,
+  fetchRecentOnboarding,
   fetchRegistrationTrend,
+  fetchReportRevenuePerMonth,
   type DashboardStats,
+  type RecentOnboardingRow,
 } from "@/lib/supabase/admin";
-
-const revenueData = [
-  { month: "Jan", revenue: 7800 },
-  { month: "Feb", revenue: 9000 },
-  { month: "Mar", revenue: 9500 },
-  { month: "Apr", revenue: 9300 },
-  { month: "May", revenue: 10800 },
-  { month: "Jun", revenue: 12200 },
-];
+import { formatSupabaseError } from "@/lib/supabase/errors";
 
 type OnboardingType = "Family" | "Babysitter";
 type OnboardingStatus = "Verified" | "Pending";
-
-interface OnboardingRow {
-  type: OnboardingType;
-  name: string;
-  email: string;
-  date: string;
-  status: OnboardingStatus;
-  details: OnboardingDetails;
-}
-
-const recentOnboarding: OnboardingRow[] = [
-  {
-    type: "Family",
-    name: "Johnson Family",
-    email: "johnson@email.com",
-    date: "2024-02-24",
-    status: "Verified",
-    details: {
-      type: "Family",
-      name: "Johnson Family",
-      registeredOn: "2024-02-24",
-      status: "Verified",
-      email: "johnson@email.com",
-      phone: "+1 (555) 123-4567",
-      address: "123 Maple Street, Boston, MA 02101",
-      numberOfChildren: 2,
-      childrenAges: "5, 8 years",
-      backgroundCheck: "Completed - 2024-02-20",
-      preferredRate: "$15-20/hour",
-    },
-  },
-  {
-    type: "Babysitter",
-    name: "Emma Martinez",
-    email: "emma.m@email.com",
-    date: "2024-02-24",
-    status: "Pending",
-    details: {
-      type: "Babysitter",
-      name: "Emma Martinez",
-      registeredOn: "2024-02-24",
-      status: "Pending",
-      email: "emma.m@email.com",
-      phone: "+1 (555) 234-5678",
-      address: "45 Oak Avenue, Cambridge, MA 02139",
-      yearsOfExperience: 3,
-      ageGroups: "Toddlers, School-age",
-      backgroundCheck: "In Progress",
-      hourlyRate: "$18/hour",
-    },
-  },
-  {
-    type: "Family",
-    name: "Miller Family",
-    email: "miller@email.com",
-    date: "2024-02-23",
-    status: "Verified",
-    details: {
-      type: "Family",
-      name: "Miller Family",
-      registeredOn: "2024-02-23",
-      status: "Verified",
-      email: "miller@email.com",
-      phone: "+1 (555) 345-6789",
-      address: "78 Pine Road, Newton, MA 02458",
-      numberOfChildren: 3,
-      childrenAges: "2, 6, 10 years",
-      backgroundCheck: "Completed - 2024-02-19",
-      preferredRate: "$18-22/hour",
-    },
-  },
-  {
-    type: "Babysitter",
-    name: "Jake Thompson",
-    email: "jake.t@email.com",
-    date: "2024-02-23",
-    status: "Verified",
-    details: {
-      type: "Babysitter",
-      name: "Jake Thompson",
-      registeredOn: "2024-02-23",
-      status: "Verified",
-      email: "jake.t@email.com",
-      phone: "+1 (555) 456-7890",
-      address: "12 Elm Street, Brookline, MA 02446",
-      yearsOfExperience: 5,
-      ageGroups: "School-age, Teens",
-      backgroundCheck: "Completed - 2024-02-18",
-      hourlyRate: "$22/hour",
-    },
-  },
-  {
-    type: "Family",
-    name: "Davis Family",
-    email: "davis@email.com",
-    date: "2024-02-23",
-    status: "Pending",
-    details: {
-      type: "Family",
-      name: "Davis Family",
-      registeredOn: "2024-02-23",
-      status: "Pending",
-      email: "davis@email.com",
-      phone: "+1 (555) 567-8901",
-      address: "34 Birch Lane, Somerville, MA 02143",
-      numberOfChildren: 1,
-      childrenAges: "4 years",
-      backgroundCheck: "Pending",
-      preferredRate: "$15/hour",
-    },
-  },
-  {
-    type: "Babysitter",
-    name: "Lily Chen",
-    email: "lily.chen@email.com",
-    date: "2024-02-22",
-    status: "Pending",
-    details: {
-      type: "Babysitter",
-      name: "Lily Chen",
-      registeredOn: "2024-02-22",
-      status: "Pending",
-      email: "lily.chen@email.com",
-      phone: "+1 (555) 678-9012",
-      address: "90 Cedar Court, Quincy, MA 02169",
-      yearsOfExperience: 2,
-      ageGroups: "Infants, Toddlers",
-      backgroundCheck: "Pending",
-      hourlyRate: "$16/hour",
-    },
-  },
-  {
-    type: "Family",
-    name: "Wilson Family",
-    email: "wilson@email.com",
-    date: "2024-02-22",
-    status: "Verified",
-    details: {
-      type: "Family",
-      name: "Wilson Family",
-      registeredOn: "2024-02-22",
-      status: "Verified",
-      email: "wilson@email.com",
-      phone: "+1 (555) 789-0123",
-      address: "56 Spruce Drive, Medford, MA 02155",
-      numberOfChildren: 2,
-      childrenAges: "7, 11 years",
-      backgroundCheck: "Completed - 2024-02-17",
-      preferredRate: "$20/hour",
-    },
-  },
-  {
-    type: "Babysitter",
-    name: "Marcus Johnson",
-    email: "marcus.j@email.com",
-    date: "2024-02-22",
-    status: "Verified",
-    details: {
-      type: "Babysitter",
-      name: "Marcus Johnson",
-      registeredOn: "2024-02-22",
-      status: "Verified",
-      email: "marcus.j@email.com",
-      phone: "+1 (555) 890-1234",
-      address: "23 Willow Way, Arlington, MA 02474",
-      yearsOfExperience: 4,
-      ageGroups: "Toddlers, School-age",
-      backgroundCheck: "Completed - 2024-02-16",
-      hourlyRate: "$20/hour",
-    },
-  },
-];
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
@@ -222,6 +45,17 @@ export default function DashboardPage() {
   const [registrationData, setRegistrationData] = useState<
     { month: string; families: number; babysitters: number }[]
   >([]);
+  const [revenueRows, setRevenueRows] = useState<{ month: string; revenue: number }[]>([]);
+  const [revenueError, setRevenueError] = useState<string | null>(null);
+  const [onboardingRows, setOnboardingRows] = useState<RecentOnboardingRow[]>([]);
+  const [onboardingLoading, setOnboardingLoading] = useState(true);
+  const [onboardingError, setOnboardingError] = useState<string | null>(null);
+
+  const revenueYMax = useMemo(() => {
+    const m = Math.max(1, ...revenueRows.map((r) => r.revenue), 0);
+    return Math.ceil(m * 1.12);
+  }, [revenueRows]);
+
   useEffect(() => setMounted(true), []);
   useEffect(() => {
     let cancelled = false;
@@ -231,7 +65,7 @@ export default function DashboardPage() {
         if (!cancelled) setStats(s);
       } catch (e) {
         if (!cancelled)
-          setStatsError(e instanceof Error ? e.message : "Failed to load stats");
+          setStatsError(formatSupabaseError(e));
       }
     })();
     return () => {
@@ -246,11 +80,15 @@ export default function DashboardPage() {
         if (cancelled) return;
         const byDay = new Map<string, { families: number; babysitters: number }>();
         for (const row of trend) {
-          const key = row.d.slice(0, 10);
+          const dRaw = typeof row.d === "string" ? row.d : String(row.d ?? "");
+          const key = dRaw.slice(0, 10);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) continue;
           if (!byDay.has(key)) byDay.set(key, { families: 0, babysitters: 0 });
           const v = byDay.get(key)!;
-          if (row.role === "family") v.families += row.cnt;
-          if (row.role === "sitter") v.babysitters += row.cnt;
+          const n = typeof row.cnt === "string" ? parseInt(row.cnt, 10) : Number(row.cnt);
+          const role = String(row.role ?? "").toLowerCase();
+          if (role === "family") v.families += Number.isFinite(n) ? n : 0;
+          if (role === "sitter") v.babysitters += Number.isFinite(n) ? n : 0;
         }
         const chart = [...byDay.entries()]
           .sort((a, b) => a[0].localeCompare(b[0]))
@@ -263,6 +101,43 @@ export default function DashboardPage() {
         setRegistrationData(chart);
       } catch {
         if (!cancelled) setRegistrationData([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setRevenueError(null);
+      try {
+        const rows = await fetchReportRevenuePerMonth(6);
+        if (!cancelled) setRevenueRows(rows);
+      } catch (e) {
+        if (!cancelled)
+          setRevenueError(formatSupabaseError(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setOnboardingLoading(true);
+      setOnboardingError(null);
+      try {
+        const rows = await fetchRecentOnboarding(30);
+        if (!cancelled) setOnboardingRows(rows);
+      } catch (e) {
+        if (!cancelled)
+          setOnboardingError(formatSupabaseError(e));
+      } finally {
+        if (!cancelled) setOnboardingLoading(false);
       }
     })();
     return () => {
@@ -291,13 +166,33 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {statsError ? (
-        <p
-          role="alert"
-          className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-200"
-        >
-          {statsError}
-        </p>
+      {statsError || revenueError || onboardingError ? (
+        <div className="space-y-2">
+          {statsError ? (
+            <p
+              role="alert"
+              className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-200"
+            >
+              {statsError}
+            </p>
+          ) : null}
+          {revenueError ? (
+            <p
+              role="alert"
+              className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-200"
+            >
+              Revenue chart: {revenueError}
+            </p>
+          ) : null}
+          {onboardingError ? (
+            <p
+              role="alert"
+              className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-200"
+            >
+              Recent onboarding: {onboardingError}
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {/* Stat cards */}
@@ -384,14 +279,20 @@ export default function DashboardPage() {
 
         <ChartCard
           title="Revenue Trends"
-          subtitle="Monthly platform revenue from completed jobs"
+          subtitle="Monthly sitter earnings posted to the ledger (last 6 months)"
         >
-          {mounted && (
+          {mounted && revenueRows.length > 0 && (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={revenueData} margin={{ top: 12, right: 12, left: -8, bottom: 0 }}>
+              <BarChart data={revenueRows} margin={{ top: 12, right: 12, left: -8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" strokeOpacity={0.4} vertical={false} />
                 <XAxis dataKey="month" stroke="#64748b" fontSize={12} tickLine={false} axisLine={{ stroke: "#334155", strokeOpacity: 0.4 }} />
-                <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} domain={[0, 14000]} ticks={[0, 3500, 7000, 10500, 14000]} />
+                <YAxis
+                  stroke="#64748b"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                  domain={[0, revenueYMax]}
+                />
                 <Tooltip
                   cursor={{ fill: "#334155", fillOpacity: 0.2 }}
                   contentStyle={{
@@ -407,6 +308,11 @@ export default function DashboardPage() {
                 <Bar dataKey="revenue" fill="#86efac" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          )}
+          {mounted && revenueRows.length === 0 && !revenueError && (
+            <p className="text-[14px] text-[#94a3b8] py-12 text-center">
+              No ledger revenue in the last six months.
+            </p>
           )}
         </ChartCard>
       </div>
@@ -435,9 +341,9 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {recentOnboarding.map((row) => (
+              {onboardingRows.map((row) => (
                 <tr
-                  key={`${row.name}-${row.date}`}
+                  key={`${row.type}-${row.email}-${row.date}`}
                   className="border-b border-[#334155]/30 last:border-0"
                 >
                   <td className="py-4 pr-4">
@@ -451,6 +357,7 @@ export default function DashboardPage() {
                   </td>
                   <td className="py-4 pl-4 text-right">
                     <button
+                      type="button"
                       onClick={() => setSelectedDetails(row.details)}
                       className="text-[14px] text-white hover:text-[#b8e0f0] transition-colors"
                     >
@@ -459,6 +366,13 @@ export default function DashboardPage() {
                   </td>
                 </tr>
               ))}
+              {onboardingRows.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-10 text-center text-[14px] text-[#94a3b8]">
+                    {onboardingLoading ? "Loading recent signups…" : "No onboarding records yet."}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

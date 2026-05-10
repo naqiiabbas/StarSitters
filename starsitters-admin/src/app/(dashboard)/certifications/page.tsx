@@ -12,6 +12,7 @@ import {
   type AdminCourseWithStats,
   type CertificationSubmissionRow,
 } from "@/lib/supabase/admin";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 import {
   CourseDetailsModal,
   type CourseProfile,
@@ -170,7 +171,7 @@ export default function CertificationsPage() {
       setCourses(crows.map(mapDbCourse));
       setApprovals(subs.map(mapSubRow));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
+      setError(formatSupabaseError(e));
       setCourses([]);
       setApprovals([]);
     } finally {
@@ -197,7 +198,7 @@ export default function CertificationsPage() {
       await adminDeleteCourse(id);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed");
+      setError(formatSupabaseError(e));
     }
   };
 
@@ -428,7 +429,7 @@ export default function CertificationsPage() {
               closeSubModal();
               await load();
             } catch (e) {
-              setError(e instanceof Error ? e.message : "Approve failed");
+              setError(formatSupabaseError(e));
             }
           })();
         }}
@@ -448,7 +449,7 @@ export default function CertificationsPage() {
               closeSubModal();
               await load();
             } catch (e) {
-              setError(e instanceof Error ? e.message : "Reject failed");
+              setError(formatSupabaseError(e));
             }
           })();
         }}

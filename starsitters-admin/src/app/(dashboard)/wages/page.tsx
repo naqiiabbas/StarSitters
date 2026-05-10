@@ -2,7 +2,13 @@
 
 import React, { useEffect, useState } from "react";
 import { DollarSign, Clock, ChevronDown, Save } from "lucide-react";
-import { fetchWageTiers, updateWageTiers } from "@/lib/supabase/admin";
+import {
+  adminUpdateSystemConfig,
+  fetchSystemConfigRows,
+  fetchWageTiers,
+  updateWageTiers,
+} from "@/lib/supabase/admin";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 
 type TimeRounding = "exact" | "round-up" | "round-15" | "round-30";
 type Overtime = "disabled" | "1.5x" | "2x";
@@ -32,6 +38,28 @@ const OVERTIME_LABELS: Record<Overtime, string> = {
   "2x": "2× after 8 hours",
 };
 
+const ROUNDING_VALUES: TimeRounding[] = ["exact", "round-up", "round-15", "round-30"];
+const OVERTIME_VALUES: Overtime[] = ["disabled", "1.5x", "2x"];
+
+function configString(v: unknown): string | null {
+  if (typeof v === "string") return v;
+  if (v == null) return null;
+  if (typeof v === "object") return JSON.stringify(v).replace(/^"|"$/g, "");
+  return String(v);
+}
+
+function parseRounding(rows: { key: string; value: unknown }[]): TimeRounding {
+  const s = configString(rows.find((r) => r.key === "time_rounding_mode")?.value);
+  if (s && ROUNDING_VALUES.includes(s as TimeRounding)) return s as TimeRounding;
+  return "exact";
+}
+
+function parseOvertime(rows: { key: string; value: unknown }[]): Overtime {
+  const s = configString(rows.find((r) => r.key === "overtime_mode")?.value);
+  if (s && OVERTIME_VALUES.includes(s as Overtime)) return s as Overtime;
+  return "disabled";
+}
+
 function rateForAge(age: number, rates: Rates): number {
   if (age <= 12) return rates.age11_12;
   if (age <= 14) return rates.age13_14;
@@ -57,11 +85,13 @@ export default function WagesPage() {
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [loadedRounding, setLoadedRounding] = useState<TimeRounding>("exact");
+  const [loadedOvertime, setLoadedOvertime] = useState<Overtime>("disabled");
 
   useEffect(() => {
     void (async () => {
       try {
-        const tiers = await fetchWageTiers();
+        const [tiers, cfgRows] = await Promise.all([fetchWageTiers(), fetchSystemConfigRows()]);
         const today = new Date().toISOString().slice(0, 10);
         const active = tiers.filter(
           (t: { effective_from: string }) => t.effective_from <= today,
@@ -77,8 +107,14 @@ export default function WagesPage() {
         };
         setRates(next);
         setDraftRates(next);
+        const r = parseRounding(cfgRows);
+        const o = parseOvertime(cfgRows);
+        setRounding(r);
+        setOvertime(o);
+        setLoadedRounding(r);
+        setLoadedOvertime(o);
       } catch (e) {
-        setErrorMessage(e instanceof Error ? e.message : "Failed to load wage tiers");
+        setErrorMessage(formatSupabaseError(e));
       }
     })();
   }, []);
@@ -91,15 +127,23 @@ export default function WagesPage() {
     setBusy(true);
     setErrorMessage(null);
     try {
-      await updateWageTiers([
-        { min_age: 11, max_age: 12, hourly_rate: draftRates.age11_12 },
-        { min_age: 13, max_age: 14, hourly_rate: draftRates.age13_14 },
-        { min_age: 15, max_age: 17, hourly_rate: draftRates.age15_17 },
+      await Promise.all([
+        adminUpdateSystemConfig({
+          time_rounding_mode: rounding,
+          overtime_mode: overtime,
+        }),
+        updateWageTiers([
+          { min_age: 11, max_age: 12, hourly_rate: draftRates.age11_12 },
+          { min_age: 13, max_age: 14, hourly_rate: draftRates.age13_14 },
+          { min_age: 15, max_age: 17, hourly_rate: draftRates.age15_17 },
+        ]),
       ]);
       setRates(draftRates);
+      setLoadedRounding(rounding);
+      setLoadedOvertime(overtime);
       setSavedAt(new Date().toLocaleTimeString());
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "Save failed");
+      setErrorMessage(formatSupabaseError(e));
     } finally {
       setBusy(false);
     }
@@ -107,6 +151,8 @@ export default function WagesPage() {
 
   const handleCancel = () => {
     setDraftRates(rates);
+    setRounding(loadedRounding);
+    setOvertime(loadedOvertime);
   };
 
   return (
@@ -196,7 +242,9 @@ export default function WagesPage() {
         ) : null}
         {savedAt ? (
           <p className="mt-4 text-sm text-[#34d399]">
-            Saved to Supabase at {savedAt} (effective tomorrow per BACKEND.md §11).
+            Saved to Supabase at {savedAt}. Age-tier rates take effect on the next effective date
+            (see BACKEND.md §11); rounding and overtime rules are stored in{" "}
+            <code className="text-[#94a3b8]">system_config</code>.
           </p>
         ) : null}
 

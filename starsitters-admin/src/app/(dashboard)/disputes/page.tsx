@@ -14,6 +14,7 @@ import {
   setDisputeStatus,
   type DisputeRow,
 } from "@/lib/supabase/admin";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 
 function priorityFromDb(p: DisputeRow["priority"]): DisputePriority {
   if (p === "high") return "High";
@@ -93,7 +94,7 @@ export default function DisputesPage() {
       const rows = await fetchDisputes();
       setDisputes(rows.map(rowToDispute));
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "Failed to load disputes");
+      setErrorMessage(formatSupabaseError(e));
     } finally {
       setLoading(false);
     }
@@ -117,7 +118,7 @@ export default function DisputesPage() {
       setSelectedId(null);
       await reload();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "Resolve failed");
+      setErrorMessage(formatSupabaseError(e));
     }
   };
 
@@ -127,7 +128,7 @@ export default function DisputesPage() {
       await setDisputeStatus(selectedId, statusToDb(status));
       await reload();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "Update failed");
+      setErrorMessage(formatSupabaseError(e));
     }
   };
 

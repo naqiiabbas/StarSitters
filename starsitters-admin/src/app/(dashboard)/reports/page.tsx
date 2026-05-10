@@ -33,6 +33,8 @@ import {
   type ReportCertStats,
   type ReportSummary,
 } from "@/lib/supabase/admin";
+import { formatSupabaseError } from "@/lib/supabase/errors";
+import { downloadReportsPdf } from "@/lib/reportsPdf";
 
 const PIE_COLORS = ["#a5d8eb", "#c4b5fd", "#86efac", "#fca5a5", "#fcd34d", "#a78bfa"];
 
@@ -66,6 +68,7 @@ export default function ReportsPage() {
     { month: string; families: number; babysitters: number }[]
   >([]);
   const [certStats, setCertStats] = useState<ReportCertStats | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const months = useMemo(() => periodToMonths(period), [period]);
 
@@ -102,7 +105,7 @@ export default function ReportsPage() {
       setUserGrowth(growth);
       setCertStats(certs);
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : "Failed to load reports");
+      setLoadError(formatSupabaseError(e));
     } finally {
       setLoading(false);
     }
@@ -179,7 +182,34 @@ export default function ReportsPage() {
               window.open("/api/admin/reports/export", "_blank", "noopener,noreferrer");
             }}
           />
-          <ExportButton label="Export PDF" disabled />
+          <ExportButton
+            label={pdfBusy ? "Building PDF…" : "Export PDF"}
+            disabled={loading || !!loadError || pdfBusy}
+            onClick={() => {
+              setPdfBusy(true);
+              window.setTimeout(() => {
+                try {
+                  downloadReportsPdf({
+                    periodLabel: period,
+                    summary,
+                    certStats,
+                    jobsPerMonth,
+                    hoursPerMonth,
+                    wageDistribution: wageDistribution.map(({ name, value }) => ({ name, value })),
+                    jobStatusDistribution: jobStatusDistribution.map(({ name, value }) => ({
+                      name,
+                      value,
+                    })),
+                    userGrowth,
+                  });
+                } catch (e) {
+                  window.alert(formatSupabaseError(e));
+                } finally {
+                  setPdfBusy(false);
+                }
+              }, 0);
+            }}
+          />
         </div>
       </div>
 

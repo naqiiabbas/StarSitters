@@ -12,6 +12,7 @@ import {
   unsuspendSitter,
   type SitterRow,
 } from "@/lib/supabase/admin";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 
 type CertificationStatus = "Certified" | "Pending";
 type AccountStatus = "Active" | "Pending" | "Suspended";
@@ -79,7 +80,7 @@ export default function BabysittersPage() {
       const rows = await fetchSitters();
       setBabysitters(rows.map(rowToBabysitter));
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "Failed to load babysitters");
+      setErrorMessage(formatSupabaseError(e));
     } finally {
       setLoading(false);
     }
@@ -104,7 +105,7 @@ export default function BabysittersPage() {
       await suspendSitter(id, reason.trim(), null);
       await reload();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "Suspend failed");
+      setErrorMessage(formatSupabaseError(e));
     }
   };
 
@@ -113,7 +114,7 @@ export default function BabysittersPage() {
       await unsuspendSitter(id);
       await reload();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "Unsuspend failed");
+      setErrorMessage(formatSupabaseError(e));
     }
   };
 

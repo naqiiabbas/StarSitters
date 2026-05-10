@@ -7,6 +7,7 @@ import {
   fetchAdminCoursesWithStats,
   fetchDashboardStats,
 } from "@/lib/supabase/admin";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 import {
   ArrowLeft,
   ArrowRight,
@@ -233,7 +234,7 @@ export default function CreateCoursePage() {
         setShowToast(true);
         setTimeout(() => router.push("/courses"), 1200);
       } catch (e) {
-        setPublishError(e instanceof Error ? e.message : "Could not save course");
+        setPublishError(formatSupabaseError(e));
       } finally {
         setPublishBusy(false);
       }

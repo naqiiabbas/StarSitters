@@ -14,6 +14,7 @@ import {
   rejectFamily,
   type FamilyRow,
 } from "@/lib/supabase/admin";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 
 type VerificationStatus = "Approved" | "Pending" | "Rejected";
 type BackgroundCheck = "Completed" | "Pending" | "Failed";
@@ -86,7 +87,7 @@ export default function FamiliesPage() {
       const rows = await fetchFamilies();
       setFamilies(rows.map(rowToFamily));
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "Failed to load families");
+      setErrorMessage(formatSupabaseError(e));
     } finally {
       setLoading(false);
     }
@@ -121,7 +122,7 @@ export default function FamiliesPage() {
       await approveFamily(id);
       await reload();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "Approve failed");
+      setErrorMessage(formatSupabaseError(e));
     }
   };
 
@@ -130,7 +131,7 @@ export default function FamiliesPage() {
       await rejectFamily(id, reason || "Rejected by admin");
       await reload();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "Reject failed");
+      setErrorMessage(formatSupabaseError(e));
     }
   };
 
