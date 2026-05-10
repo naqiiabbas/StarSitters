@@ -1,11 +1,17 @@
 "use client";
 
-import React, { useState } from "react";
-import { Eye, Search, ChevronDown } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Eye, Search, ChevronDown, ShieldOff, ShieldCheck } from "lucide-react";
 import {
   BabysitterDetailsModal,
   type BabysitterProfile,
 } from "@/components/ui/BabysitterDetailsModal";
+import {
+  fetchSitters,
+  suspendSitter,
+  unsuspendSitter,
+  type SitterRow,
+} from "@/lib/supabase/admin";
 
 type CertificationStatus = "Certified" | "Pending";
 type AccountStatus = "Active" | "Pending" | "Suspended";
@@ -22,164 +28,94 @@ interface Babysitter {
   profile: BabysitterProfile;
 }
 
-const initialBabysitters: Babysitter[] = [
-  {
-    id: "B001",
-    name: "Sarah Davis",
-    age: 16,
-    registrationDate: "2024-01-10",
-    certification: "Certified",
-    accountStatus: "Active",
-    totalHours: 124,
-    totalEarnings: 1860,
+function rowToBabysitter(r: SitterRow): Babysitter {
+  const cert: CertificationStatus =
+    r.guardian_consent_status === "approved" ? "Certified" : "Pending";
+  let status: AccountStatus = "Pending";
+  if (r.is_active) status = "Active";
+  else if (r.suspension_reason) status = "Suspended";
+  return {
+    id: r.user_id,
+    name: r.full_name?.trim() || r.email || r.user_id.slice(0, 8),
+    age: r.age,
+    registrationDate: r.registered_at ? r.registered_at.slice(0, 10) : "",
+    certification: cert,
+    accountStatus: status,
+    totalHours: Math.round((r.total_minutes_worked ?? 0) / 60),
+    totalEarnings: Number(r.total_earnings ?? 0),
     profile: {
-      babysitterId: "B001",
-      fullName: "Sarah Davis",
-      age: 16,
-      email: "sarah.davis@email.com",
-      certificationStatus: "Certified",
-      accountStatus: "Active",
+      babysitterId: r.user_id,
+      fullName: r.full_name?.trim() || r.email,
+      age: r.age,
+      email: r.email,
+      certificationStatus: cert,
+      accountStatus: status,
       guardian: {
-        name: "Jane Davis",
-        relation: "Mother",
-        email: "guardian@email.com",
-        phone: "(555) 123-4567",
-        consentVerified: true,
-      },
-      certifications: [
-        { name: "CPR Certification", status: "Expires", date: "2025-01-15" },
-        { name: "First Aid Training", status: "Completed", date: "2024-01-10" },
-      ],
-      totalHoursWorked: 124,
-      totalEarnings: 1860,
-    },
-  },
-  {
-    id: "B002",
-    name: "Emma Martinez",
-    age: 15,
-    registrationDate: "2024-02-18",
-    certification: "Pending",
-    accountStatus: "Pending",
-    totalHours: 0,
-    totalEarnings: 0,
-    profile: {
-      babysitterId: "B002",
-      fullName: "Emma Martinez",
-      age: 15,
-      email: "emma.m@email.com",
-      certificationStatus: "Pending",
-      accountStatus: "Pending",
-      guardian: {
-        name: "Carlos Martinez",
-        relation: "Father",
-        email: "c.martinez@email.com",
-        phone: "(555) 234-5678",
-        consentVerified: false,
+        name: "—",
+        relation: "—",
+        email: "—",
+        phone: "—",
+        consentVerified: r.guardian_consent_status === "approved",
       },
       certifications: [],
-      totalHoursWorked: 0,
-      totalEarnings: 0,
+      totalHoursWorked: Math.round((r.total_minutes_worked ?? 0) / 60),
+      totalEarnings: Number(r.total_earnings ?? 0),
     },
-  },
-  {
-    id: "B003",
-    name: "Jake Thompson",
-    age: 17,
-    registrationDate: "2024-01-22",
-    certification: "Certified",
-    accountStatus: "Active",
-    totalHours: 98,
-    totalEarnings: 1617,
-    profile: {
-      babysitterId: "B003",
-      fullName: "Jake Thompson",
-      age: 17,
-      email: "jake.t@email.com",
-      certificationStatus: "Certified",
-      accountStatus: "Active",
-      guardian: {
-        name: "Linda Thompson",
-        relation: "Mother",
-        email: "l.thompson@email.com",
-        phone: "(555) 345-6789",
-        consentVerified: true,
-      },
-      certifications: [
-        { name: "CPR Certification", status: "Expires", date: "2025-03-22" },
-        { name: "First Aid Training", status: "Completed", date: "2024-01-22" },
-      ],
-      totalHoursWorked: 98,
-      totalEarnings: 1617,
-    },
-  },
-  {
-    id: "B004",
-    name: "Lily Chen",
-    age: 14,
-    registrationDate: "2024-02-05",
-    certification: "Pending",
-    accountStatus: "Pending",
-    totalHours: 0,
-    totalEarnings: 0,
-    profile: {
-      babysitterId: "B004",
-      fullName: "Lily Chen",
-      age: 14,
-      email: "lily.chen@email.com",
-      certificationStatus: "Pending",
-      accountStatus: "Pending",
-      guardian: {
-        name: "Wei Chen",
-        relation: "Father",
-        email: "w.chen@email.com",
-        phone: "(555) 456-7890",
-        consentVerified: false,
-      },
-      certifications: [],
-      totalHoursWorked: 0,
-      totalEarnings: 0,
-    },
-  },
-  {
-    id: "B005",
-    name: "Marcus Johnson",
-    age: 16,
-    registrationDate: "2024-01-15",
-    certification: "Certified",
-    accountStatus: "Active",
-    totalHours: 156,
-    totalEarnings: 2340,
-    profile: {
-      babysitterId: "B005",
-      fullName: "Marcus Johnson",
-      age: 16,
-      email: "marcus.j@email.com",
-      certificationStatus: "Certified",
-      accountStatus: "Active",
-      guardian: {
-        name: "Andre Johnson",
-        relation: "Father",
-        email: "a.johnson@email.com",
-        phone: "(555) 567-8901",
-        consentVerified: true,
-      },
-      certifications: [
-        { name: "CPR Certification", status: "Expires", date: "2025-01-15" },
-        { name: "First Aid Training", status: "Completed", date: "2024-01-15" },
-        { name: "Child Development Course", status: "Completed", date: "2024-02-01" },
-      ],
-      totalHoursWorked: 156,
-      totalEarnings: 2340,
-    },
-  },
-];
+  };
+}
 
 export default function BabysittersPage() {
-  const [babysitters] = useState<Babysitter[]>(initialBabysitters);
+  const [babysitters, setBabysitters] = useState<Babysitter[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | AccountStatus>("all");
   const [selected, setSelected] = useState<BabysitterProfile | null>(null);
+
+  const reload = async () => {
+    setLoading(true);
+    setErrorMessage(null);
+    try {
+      const rows = await fetchSitters();
+      setBabysitters(rows.map(rowToBabysitter));
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "Failed to load babysitters");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void reload();
+  }, []);
+
+  const summary = useMemo(() => {
+    const total = babysitters.length;
+    const certified = babysitters.filter((b) => b.certification === "Certified").length;
+    const active = babysitters.filter((b) => b.accountStatus === "Active").length;
+    const pending = babysitters.filter((b) => b.accountStatus === "Pending").length;
+    return { total, certified, active, pending };
+  }, [babysitters]);
+
+  const handleSuspend = async (id: string) => {
+    const reason = window.prompt("Reason for suspension (min 5 chars)");
+    if (!reason || reason.trim().length < 5) return;
+    try {
+      await suspendSitter(id, reason.trim(), null);
+      await reload();
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "Suspend failed");
+    }
+  };
+
+  const handleUnsuspend = async (id: string) => {
+    try {
+      await unsuspendSitter(id);
+      await reload();
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "Unsuspend failed");
+    }
+  };
 
   const filtered = babysitters.filter((b) => {
     const q = search.toLowerCase();
@@ -204,12 +140,37 @@ export default function BabysittersPage() {
         </p>
       </div>
 
+      {errorMessage ? (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-200"
+        >
+          {errorMessage}
+        </p>
+      ) : null}
+
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SimpleStatCard label="Total Babysitters" value="189" valueColor="text-white" />
-        <SimpleStatCard label="Certified" value="156" valueColor="text-[#34d399]" />
-        <SimpleStatCard label="Active" value="143" valueColor="text-[#c4b5fd]" />
-        <SimpleStatCard label="Pending Approval" value="12" valueColor="text-[#ef4444]" />
+        <SimpleStatCard
+          label="Total Babysitters"
+          value={summary.total.toLocaleString()}
+          valueColor="text-white"
+        />
+        <SimpleStatCard
+          label="Certified"
+          value={summary.certified.toLocaleString()}
+          valueColor="text-[#34d399]"
+        />
+        <SimpleStatCard
+          label="Active"
+          value={summary.active.toLocaleString()}
+          valueColor="text-[#c4b5fd]"
+        />
+        <SimpleStatCard
+          label="Pending Approval"
+          value={summary.pending.toLocaleString()}
+          valueColor="text-[#ef4444]"
+        />
       </div>
 
       {/* Table card */}
@@ -288,6 +249,23 @@ export default function BabysittersPage() {
                       >
                         <Eye className="w-[18px] h-[18px]" strokeWidth={1.75} />
                       </button>
+                      {b.accountStatus === "Active" ? (
+                        <button
+                          onClick={() => void handleSuspend(b.id)}
+                          aria-label="Suspend"
+                          className="p-1.5 text-[#ef4444] hover:text-[#dc2626] transition-colors"
+                        >
+                          <ShieldOff className="w-[18px] h-[18px]" strokeWidth={1.75} />
+                        </button>
+                      ) : b.accountStatus === "Suspended" ? (
+                        <button
+                          onClick={() => void handleUnsuspend(b.id)}
+                          aria-label="Unsuspend"
+                          className="p-1.5 text-[#34d399] hover:text-[#22c55e] transition-colors"
+                        >
+                          <ShieldCheck className="w-[18px] h-[18px]" strokeWidth={1.75} />
+                        </button>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -295,7 +273,7 @@ export default function BabysittersPage() {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={9} className="py-10 text-center text-[14px] text-[#94a3b8]">
-                    No babysitters match your filters.
+                    {loading ? "Loading babysitters…" : "No babysitters match your filters."}
                   </td>
                 </tr>
               )}

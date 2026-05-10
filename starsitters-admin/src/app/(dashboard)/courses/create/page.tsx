@@ -1,7 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  adminInsertCourse,
+  fetchAdminCoursesWithStats,
+  fetchDashboardStats,
+} from "@/lib/supabase/admin";
 import {
   ArrowLeft,
   ArrowRight,
@@ -57,6 +62,13 @@ const STEPS: { idx: StepIndex; title: string; subtitle: string }[] = [
 export default function CreateCoursePage() {
   const router = useRouter();
   const [step, setStep] = useState<StepIndex>(1);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statActive, setStatActive] = useState(0);
+  const [statEnroll, setStatEnroll] = useState(0);
+  const [statPending, setStatPending] = useState(0);
+  const [statAvg, setStatAvg] = useState(0);
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   // Step 1 state
   const [title, setTitle] = useState("");
@@ -83,6 +95,47 @@ export default function CreateCoursePage() {
   // Step 5 state
   const [publishMode, setPublishMode] = useState<"draft" | "publish">("publish");
   const [showToast, setShowToast] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setStatsLoading(true);
+      try {
+        const [rows, dash] = await Promise.all([
+          fetchAdminCoursesWithStats(),
+          fetchDashboardStats(),
+        ]);
+        if (cancelled) return;
+        const active = rows.filter((r) => r.status === "published").length;
+        const enroll = rows.reduce((s, r) => s + r.submissions_count, 0);
+        const pending = dash.certs_pending;
+        const withSub = rows.filter((r) => r.submissions_count > 0);
+        const avg =
+          withSub.length > 0
+            ? Math.round(
+                withSub.reduce((s, r) => s + Math.min(100, Math.round(r.completion_avg)), 0) /
+                  withSub.length,
+              )
+            : 0;
+        setStatActive(active);
+        setStatEnroll(enroll);
+        setStatPending(pending);
+        setStatAvg(avg);
+      } catch {
+        if (!cancelled) {
+          setStatActive(0);
+          setStatEnroll(0);
+          setStatPending(0);
+          setStatAvg(0);
+        }
+      } finally {
+        if (!cancelled) setStatsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const progressPercent = (step / 5) * 100;
 
@@ -146,8 +199,45 @@ export default function CreateCoursePage() {
   };
 
   const handlePublish = () => {
-    setShowToast(true);
-    setTimeout(() => router.push("/courses"), 1800);
+    void (async () => {
+      setPublishError(null);
+      const t = title.trim();
+      if (t.length < 5) {
+        setPublishError("Course title must be at least 5 characters.");
+        return;
+      }
+      if (!category.trim()) {
+        setPublishError("Please select a category.");
+        return;
+      }
+      setPublishBusy(true);
+      try {
+        const modTitles =
+          modules.length > 0
+            ? modules.map((m) => (m.title.trim() ? m.title.trim() : "Module"))
+            : ["Module 1"];
+        await adminInsertCourse({
+          name: t,
+          category: category.trim(),
+          status: publishMode === "publish" ? "published" : "draft",
+          description: description.trim() || null,
+          modules: modTitles,
+          instructor: "Star Sitters",
+          duration_hours: parseFloat(duration) || 0,
+          level: "Beginner",
+          price: parseFloat(price) || 0,
+          requirements: null,
+          learning_objectives: `Target passing score: ${passingScore}%`,
+          provides_certificate: true,
+        });
+        setShowToast(true);
+        setTimeout(() => router.push("/courses"), 1200);
+      } catch (e) {
+        setPublishError(e instanceof Error ? e.message : "Could not save course");
+      } finally {
+        setPublishBusy(false);
+      }
+    })();
   };
 
   return (
@@ -167,14 +257,43 @@ export default function CreateCoursePage() {
         <p className="mt-1 text-[15px] text-[#94a3b8]">
           Set up a new training course or certification program
         </p>
+        {publishError && (
+          <p className="mt-2 text-[13px] text-red-400" role="alert">
+            {publishError}
+          </p>
+        )}
       </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Active Courses" value="12" valueColor="text-white" icon={BookOpen} iconColor="text-[#cbd5e1]" />
-        <StatCard label="Total Enrollments" value="156" valueColor="text-[#34d399]" icon={Users} iconColor="text-[#34d399]" />
-        <StatCard label="ending Approvals" value="12" valueColor="text-[#c4b5fd]" icon={AlertCircle} iconColor="text-[#c4b5fd]" />
-        <StatCard label="Avg Completion Rate" value="86%" valueColor="text-[#34d399]" icon={CheckCircle2} iconColor="text-[#34d399]" />
+        <StatCard
+          label="Active Courses"
+          value={statsLoading ? "—" : String(statActive)}
+          valueColor="text-white"
+          icon={BookOpen}
+          iconColor="text-[#cbd5e1]"
+        />
+        <StatCard
+          label="Total Enrollments"
+          value={statsLoading ? "—" : String(statEnroll)}
+          valueColor="text-[#34d399]"
+          icon={Users}
+          iconColor="text-[#34d399]"
+        />
+        <StatCard
+          label="Pending certifications"
+          value={statsLoading ? "—" : String(statPending)}
+          valueColor="text-[#c4b5fd]"
+          icon={AlertCircle}
+          iconColor="text-[#c4b5fd]"
+        />
+        <StatCard
+          label="Avg completion (courses w/ subs)"
+          value={statsLoading ? "—" : `${statAvg}%`}
+          valueColor="text-[#34d399]"
+          icon={CheckCircle2}
+          iconColor="text-[#34d399]"
+        />
       </div>
 
       {/* Step progress */}
@@ -335,11 +454,13 @@ export default function CreateCoursePage() {
               </button>
             ) : (
               <button
+                type="button"
+                disabled={publishBusy}
                 onClick={handlePublish}
-                className="inline-flex items-center justify-center gap-2 h-[44px] px-5 bg-[#22c55e] hover:bg-[#16a34a] text-white text-[14px] font-semibold rounded-[10px] transition-all"
+                className="inline-flex items-center justify-center gap-2 h-[44px] px-5 bg-[#22c55e] hover:bg-[#16a34a] disabled:opacity-50 text-white text-[14px] font-semibold rounded-[10px] transition-all"
               >
                 <Check className="w-4 h-4" strokeWidth={2.5} />
-                Publish Course
+                {publishBusy ? "Saving…" : publishMode === "publish" ? "Publish Course" : "Save Draft"}
               </button>
             )}
           </div>

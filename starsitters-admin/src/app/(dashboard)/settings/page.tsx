@@ -1,6 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  adminUpdateSystemConfig,
+  fetchAuditLogs,
+  fetchSystemConfigRows,
+  type AuditLogAdminRow,
+  type SystemConfigRow,
+} from "@/lib/supabase/admin";
 import {
   Settings as SettingsIcon,
   Users,
@@ -13,8 +20,35 @@ import {
 
 type SettingsTab = "platform" | "security" | "data" | "audit";
 
+function cfgBool(rows: SystemConfigRow[], key: string, fallback: boolean) {
+  const v = rows.find((r) => r.key === key)?.value;
+  if (typeof v === "boolean") return v;
+  if (v === "true" || v === true) return true;
+  if (v === "false" || v === false) return false;
+  return fallback;
+}
+
+function cfgNum(rows: SystemConfigRow[], key: string, fallback: number) {
+  const v = rows.find((r) => r.key === key)?.value;
+  if (typeof v === "number" && !Number.isNaN(v)) return v;
+  const n = Number(v);
+  return Number.isNaN(n) ? fallback : n;
+}
+
+function cfgText(rows: SystemConfigRow[], key: string, fallback: string) {
+  const v = rows.find((r) => r.key === key)?.value;
+  if (typeof v === "string") return v;
+  if (v != null && typeof v === "object") return JSON.stringify(v);
+  return fallback;
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("platform");
+  const [configLoading, setConfigLoading] = useState(true);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [saveBusy, setSaveBusy] = useState<string | null>(null);
+  const [auditRows, setAuditRows] = useState<AuditLogAdminRow[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   // Platform tab state
   const [systemNotifications, setSystemNotifications] = useState(true);
@@ -33,6 +67,118 @@ export default function SettingsPage() {
   const [autoCleanup, setAutoCleanup] = useState("Enabled");
   const [backupFrequency, setBackupFrequency] = useState("Daily");
 
+  const applyConfigRows = useCallback((rows: SystemConfigRow[]) => {
+    setSystemNotifications(cfgBool(rows, "system_notifications_enabled", true));
+    setAutoVerification(cfgBool(rows, "auto_verification_enabled", false));
+    const minY = cfgNum(rows, "min_sitter_age", 13);
+    setMinAge(`${minY} years`);
+    const maxH = cfgNum(rows, "max_job_duration_hours", 8);
+    setMaxDuration(`${maxH} hours`);
+    const gps = cfgText(rows, "gps_tracking_mode", "required").toLowerCase();
+    if (gps === "optional") setGpsTracking("Optional");
+    else if (gps === "disabled") setGpsTracking("Disabled");
+    else setGpsTracking("Required");
+
+    setTwoFactor(cfgBool(rows, "admin_two_factor_ui_enabled", true));
+    setSessionTimeout(String(cfgNum(rows, "session_timeout_minutes", 30)));
+    const attempts = cfgNum(rows, "max_login_attempts", 5);
+    setLoginAttempts(`${attempts} attempts`);
+
+    setRetentionMonths(String(cfgNum(rows, "data_retention_months", 24)));
+    setAutoCleanup(cfgBool(rows, "data_auto_cleanup_enabled", false) ? "Enabled" : "Disabled");
+    const bf = cfgText(rows, "backup_frequency", "Daily").replace(/^"|"$/g, "");
+    setBackupFrequency(["Hourly", "Daily", "Weekly", "Monthly"].includes(bf) ? bf : "Daily");
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setConfigLoading(true);
+      setConfigError(null);
+      try {
+        const rows = await fetchSystemConfigRows();
+        if (!cancelled) applyConfigRows(rows);
+      } catch (e) {
+        if (!cancelled) setConfigError(e instanceof Error ? e.message : "Failed to load settings");
+      } finally {
+        if (!cancelled) setConfigLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [applyConfigRows]);
+
+  useEffect(() => {
+    if (activeTab !== "audit") return;
+    let cancelled = false;
+    (async () => {
+      setAuditLoading(true);
+      try {
+        const rows = await fetchAuditLogs(100);
+        if (!cancelled) setAuditRows(rows);
+      } catch {
+        if (!cancelled) setAuditRows([]);
+      } finally {
+        if (!cancelled) setAuditLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab]);
+
+  const savePlatform = async () => {
+    setSaveBusy("platform");
+    try {
+      const minY = parseInt(minAge, 10);
+      const maxH = parseInt(maxDuration, 10);
+      const gps =
+        gpsTracking === "Optional"
+          ? "optional"
+          : gpsTracking === "Disabled"
+            ? "disabled"
+            : "required";
+      await adminUpdateSystemConfig({
+        system_notifications_enabled: systemNotifications,
+        auto_verification_enabled: autoVerification,
+        min_sitter_age: Number.isFinite(minY) ? minY : 13,
+        max_job_duration_hours: Number.isFinite(maxH) ? maxH : 8,
+        gps_tracking_mode: gps,
+      });
+    } finally {
+      setSaveBusy(null);
+    }
+  };
+
+  const saveSecurity = async () => {
+    setSaveBusy("security");
+    try {
+      const attempts = parseInt(loginAttempts, 10);
+      await adminUpdateSystemConfig({
+        admin_two_factor_ui_enabled: twoFactor,
+        session_timeout_minutes: parseInt(sessionTimeout, 10) || 30,
+        max_login_attempts: Number.isFinite(attempts) ? attempts : 5,
+      });
+    } finally {
+      setSaveBusy(null);
+    }
+  };
+
+  const saveData = async () => {
+    setSaveBusy("data");
+    try {
+      const months = parseInt(retentionMonths, 10) || 24;
+      await adminUpdateSystemConfig({
+        data_retention_months: months,
+        data_auto_cleanup_enabled: autoCleanup === "Enabled",
+        backup_frequency: backupFrequency,
+      });
+    } finally {
+      setSaveBusy(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -43,6 +189,14 @@ export default function SettingsPage() {
         <p className="mt-1 text-[15px] text-[#94a3b8]">
           Configure platform rules, security, and administrative controls
         </p>
+        {configLoading && (
+          <p className="mt-2 text-[13px] text-[#94a3b8]">Loading configuration…</p>
+        )}
+        {configError && (
+          <p className="mt-2 text-[13px] text-red-400" role="alert">
+            {configError}
+          </p>
+        )}
       </div>
 
       {/* Tabs */}
@@ -113,7 +267,11 @@ export default function SettingsPage() {
                 options={["Required", "Optional", "Disabled"]}
               />
             </div>
-            <SaveButton label="Save Platform Settings" />
+            <SaveButton
+              label="Save Platform Settings"
+              busy={saveBusy === "platform"}
+              onClick={savePlatform}
+            />
           </SectionCard>
 
           <SectionCard
@@ -173,7 +331,11 @@ export default function SettingsPage() {
                 options={["3 attempts", "5 attempts", "10 attempts"]}
               />
             </div>
-            <SaveButton label="Save Security Settings" />
+            <SaveButton
+              label="Save Security Settings"
+              busy={saveBusy === "security"}
+              onClick={saveSecurity}
+            />
           </SectionCard>
         </div>
       )}
@@ -217,7 +379,11 @@ export default function SettingsPage() {
                 ]}
               />
             </div>
-            <SaveButton label="Save Data Settings" />
+            <SaveButton
+              label="Save Data Settings"
+              busy={saveBusy === "data"}
+              onClick={saveData}
+            />
           </SectionCard>
         </div>
       )}
@@ -231,34 +397,11 @@ export default function SettingsPage() {
             title="Audit Log"
             description="Complete history of administrative actions"
           >
-            <AuditLogTable
-              rows={[
-                {
-                  timestamp: "2024-02-24 15:30",
-                  admin: "Admin User",
-                  action: "Updated wage configuration for age 15-17",
-                  category: "Configuration",
-                },
-                {
-                  timestamp: "2024-02-24 10:15",
-                  admin: "Admin User",
-                  action: "Approved family verification for Johnson Family",
-                  category: "Verification",
-                },
-                {
-                  timestamp: "2024-02-23 16:45",
-                  admin: "Admin User",
-                  action: "Changed data retention policy to 24 months",
-                  category: "Security",
-                },
-                {
-                  timestamp: "2024-02-23 14:20",
-                  admin: "Admin User",
-                  action: "Approved certification for Emma Martinez",
-                  category: "Certification",
-                },
-              ]}
-            />
+            {auditLoading ? (
+              <p className="text-[14px] text-[#94a3b8]">Loading audit log…</p>
+            ) : (
+              <AuditLogTable rows={auditRows} />
+            )}
           </SectionCard>
         </div>
       )}
@@ -352,15 +495,25 @@ function SectionCard({
   );
 }
 
-function SaveButton({ label }: { label: string }) {
+function SaveButton({
+  label,
+  onClick,
+  busy,
+}: {
+  label: string;
+  onClick?: () => void | Promise<void>;
+  busy?: boolean;
+}) {
   return (
     <div className="mt-6">
       <button
         type="button"
-        className="inline-flex items-center gap-2 h-[44px] px-5 bg-[#86efac] hover:bg-[#6ee7b7] text-[#064e3b] text-[14px] font-semibold rounded-[10px] transition-all"
+        disabled={busy || !onClick}
+        onClick={() => void onClick?.()}
+        className="inline-flex items-center gap-2 h-[44px] px-5 bg-[#86efac] hover:bg-[#6ee7b7] disabled:opacity-50 text-[#064e3b] text-[14px] font-semibold rounded-[10px] transition-all"
       >
         <Save className="w-[16px] h-[16px]" strokeWidth={2.25} />
-        {label}
+        {busy ? "Saving…" : label}
       </button>
     </div>
   );
@@ -533,14 +686,22 @@ function RoleRow({
   );
 }
 
-interface AuditLogRow {
-  timestamp: string;
-  admin: string;
-  action: string;
-  category: string;
+function actorEmail(
+  actor: AuditLogAdminRow["actor"],
+): { email: string; full_name: string | null } | null {
+  if (!actor) return null;
+  if (Array.isArray(actor)) return actor[0] ?? null;
+  return actor;
 }
 
-function AuditLogTable({ rows }: { rows: AuditLogRow[] }) {
+function AuditLogTable({ rows }: { rows: AuditLogAdminRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <p className="text-[14px] text-[#94a3b8] py-6 text-center border border-white/10 rounded-[12px]">
+        No audit entries yet.
+      </p>
+    );
+  }
   return (
     <div className="bg-[#0f172a]/60 border border-white/10 rounded-[12px] overflow-hidden">
       <div className="overflow-x-auto custom-scrollbar">
@@ -557,32 +718,32 @@ function AuditLogTable({ rows }: { rows: AuditLogRow[] }) {
                 Action
               </th>
               <th className="text-[13px] font-medium text-[#94a3b8] py-3 px-5 text-left">
-                Category
+                Entity
               </th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, idx) => (
-              <tr
-                key={idx}
-                className="border-b border-[#334155]/30 last:border-0"
-              >
-                <td className="py-4 px-5 text-[14px] text-white whitespace-nowrap">
-                  {row.timestamp}
-                </td>
-                <td className="py-4 px-5 text-[14px] text-white whitespace-nowrap">
-                  {row.admin}
-                </td>
-                <td className="py-4 px-5 text-[14px] text-[#cbd5e1]">
-                  {row.action}
-                </td>
-                <td className="py-4 px-5">
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-[#cbd5e1] text-[12px] font-medium">
-                    {row.category}
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {rows.map((row) => {
+              const a = actorEmail(row.actor);
+              const adminLabel = a?.full_name?.trim() || a?.email || "—";
+              const category = row.entity_type ?? "—";
+              return (
+                <tr key={row.id} className="border-b border-[#334155]/30 last:border-0">
+                  <td className="py-4 px-5 text-[14px] text-white whitespace-nowrap">
+                    {new Date(row.created_at).toLocaleString()}
+                  </td>
+                  <td className="py-4 px-5 text-[14px] text-white whitespace-nowrap">
+                    {adminLabel}
+                  </td>
+                  <td className="py-4 px-5 text-[14px] text-[#cbd5e1]">{row.action}</td>
+                  <td className="py-4 px-5">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-[#cbd5e1] text-[12px] font-medium">
+                      {category}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

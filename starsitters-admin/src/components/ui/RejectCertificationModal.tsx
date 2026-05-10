@@ -37,7 +37,7 @@ export function RejectCertificationModal({
 
   if (!isOpen) return null;
 
-  const canSubmit = reason.trim().length > 0;
+  const canSubmit = reason.trim().length >= 5;
 
   return (
     <div
@@ -105,7 +105,8 @@ export function RejectCertificationModal({
             className="w-full bg-[#0f172a]/60 border border-white/10 rounded-[12px] px-4 py-3 text-[15px] text-white placeholder:text-[#64748b] focus:outline-none focus:border-[#b8e0f0]/60 focus:ring-2 focus:ring-[#b8e0f0]/15 transition-all resize-none"
           />
           <p className="mt-2 text-[13px] text-[#94a3b8]">
-            This reason will be sent to the babysitter via email notification.
+            At least 5 characters (required by the server). This reason is stored and sent to the
+            sitter as a notification.
           </p>
 
           <div className="flex justify-end gap-3 mt-6">

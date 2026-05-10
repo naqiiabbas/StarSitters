@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Search,
   Filter,
@@ -11,7 +11,10 @@ import {
   JobDetailsModal,
   type JobDetail,
   type JobStatus,
+  type TimelineEvent,
+  type TimelineEventKind,
 } from "@/components/ui/JobDetailsModal";
+import { fetchJobs, type JobRow } from "@/lib/supabase/admin";
 
 interface Job {
   id: string;
@@ -24,147 +27,101 @@ interface Job {
   detail: JobDetail;
 }
 
-const LOCATION = "123 Main Street, Springfield, IL";
+function jobStatusFromDb(s: string): JobStatus {
+  switch (s) {
+    case "open":
+      return "Open";
+    case "hired":
+      return "Hired";
+    case "active":
+      return "In Progress";
+    case "completed":
+      return "Completed";
+    case "cancelled":
+      return "Cancelled";
+    default:
+      return "Open";
+  }
+}
 
-const initialJobs: Job[] = [
-  {
-    id: "J1247",
-    familyName: "Johnson Family",
-    babysitterName: "Sarah Davis",
-    date: "2024-02-24",
-    status: "Completed",
-    totalHours: 4,
-    totalWage: 60,
+function timelineKindFromEvent(eventType: string): TimelineEventKind | null {
+  switch (eventType) {
+    case "posted":
+      return "posted";
+    case "hired":
+      return "accepted";
+    case "clock_in":
+      return "clockIn";
+    case "clock_out":
+    case "completed":
+      return "clockOut";
+    case "cancelled":
+      return "cancelled";
+    default:
+      return null;
+  }
+}
+
+function rowToJob(r: JobRow): Job {
+  const status = jobStatusFromDb(r.status);
+  const totalHours =
+    r.computed_minutes != null ? Number((r.computed_minutes / 60).toFixed(2)) : null;
+  const totalWage = r.computed_wage != null ? Number(r.computed_wage) : null;
+  const timeline: TimelineEvent[] = (r.timeline ?? [])
+    .map((t) => {
+      const kind = timelineKindFromEvent(t.event_type);
+      if (!kind) return null;
+      return {
+        kind,
+        title: t.title ?? t.event_type,
+        timestamp: t.created_at?.replace("T", " ").slice(0, 16) ?? "",
+      } as TimelineEvent;
+    })
+    .filter((x): x is TimelineEvent => x !== null);
+
+  return {
+    id: r.job_id,
+    familyName: r.family_name ?? "—",
+    babysitterName: r.sitter_name ?? null,
+    date: r.job_date ?? "",
+    status,
+    totalHours,
+    totalWage,
     detail: {
-      id: "J1247",
-      familyName: "Johnson Family",
-      babysitterName: "Sarah Davis",
-      date: "2024-02-24",
-      status: "Completed",
-      totalHoursLabel: "4 hours",
-      location: LOCATION,
-      locationVerified: true,
-      clockIn: "14:00",
-      clockOut: "18:00",
-      hourlyRate: 15.0,
-      hoursWorked: 4,
-      totalWage: 60,
-      timeline: [
-        { kind: "posted", title: "Job posted by family", timestamp: "2024-02-22 10:30" },
-        { kind: "accepted", title: "Babysitter accepted job", timestamp: "2024-02-22 14:15" },
-        { kind: "clockIn", title: "Clock in recorded", timestamp: "2024-02-24 14:00" },
-        { kind: "clockOut", title: "Clock out recorded", timestamp: "2024-02-24 18:00" },
-      ],
+      id: r.job_id,
+      familyName: r.family_name ?? "—",
+      babysitterName: r.sitter_name ?? null,
+      date: r.job_date ?? "",
+      status,
+      totalHoursLabel:
+        totalHours != null
+          ? `${totalHours} hours`
+          : status === "Completed"
+            ? "Pending"
+            : "Not completed",
+      location: "—",
+      locationVerified: false,
+      hoursWorked: totalHours ?? undefined,
+      totalWage: totalWage ?? undefined,
+      timeline,
     },
-  },
-  {
-    id: "J1248",
-    familyName: "Miller Family",
-    babysitterName: "Jake Thompson",
-    date: "2024-02-24",
-    status: "In Progress",
-    totalHours: null,
-    totalWage: null,
-    detail: {
-      id: "J1248",
-      familyName: "Miller Family",
-      babysitterName: "Jake Thompson",
-      date: "2024-02-24",
-      status: "In Progress",
-      totalHoursLabel: "Not completed",
-      location: LOCATION,
-      locationVerified: true,
-      clockIn: "15:30",
-      clockOut: null,
-      timeline: [
-        { kind: "posted", title: "Job posted by family", timestamp: "2024-02-22 10:30" },
-        { kind: "accepted", title: "Babysitter accepted job", timestamp: "2024-02-22 14:15" },
-        { kind: "clockIn", title: "Clock in recorded", timestamp: "2024-02-24 15:30" },
-      ],
-    },
-  },
-  {
-    id: "J1249",
-    familyName: "Davis Family",
-    babysitterName: "Emma Martinez",
-    date: "2024-02-25",
-    status: "Hired",
-    totalHours: null,
-    totalWage: null,
-    detail: {
-      id: "J1249",
-      familyName: "Davis Family",
-      babysitterName: "Emma Martinez",
-      date: "2024-02-25",
-      status: "Hired",
-      totalHoursLabel: "Not completed",
-      location: LOCATION,
-      locationVerified: true,
-      timeline: [
-        { kind: "posted", title: "Job posted by family", timestamp: "2024-02-22 10:30" },
-        { kind: "accepted", title: "Babysitter accepted job", timestamp: "2024-02-22 14:15" },
-        { kind: "clockIn", title: "Clock in recorded", timestamp: "2024-02-25" },
-      ],
-    },
-  },
-  {
-    id: "J1250",
-    familyName: "Wilson Family",
-    babysitterName: null,
-    date: "2024-02-26",
-    status: "Open",
-    totalHours: null,
-    totalWage: null,
-    detail: {
-      id: "J1250",
-      familyName: "Wilson Family",
-      babysitterName: null,
-      date: "2024-02-26",
-      status: "Open",
-      totalHoursLabel: "Not completed",
-      location: LOCATION,
-      locationVerified: true,
-      timeline: [
-        { kind: "posted", title: "Job posted by family", timestamp: "2024-02-22 10:30" },
-        { kind: "accepted", title: "Babysitter accepted job", timestamp: "2024-02-22 14:15" },
-        { kind: "clockIn", title: "Clock in recorded", timestamp: "2024-02-26" },
-      ],
-    },
-  },
-  {
-    id: "J1246",
-    familyName: "Anderson Family",
-    babysitterName: "Marcus Johnson",
-    date: "2024-02-23",
-    status: "Completed",
-    totalHours: 5,
-    totalWage: 75,
-    detail: {
-      id: "J1246",
-      familyName: "Anderson Family",
-      babysitterName: "Marcus Johnson",
-      date: "2024-02-23",
-      status: "Completed",
-      totalHoursLabel: "5 hours",
-      location: LOCATION,
-      locationVerified: true,
-      clockIn: "13:00",
-      clockOut: "18:00",
-      hourlyRate: 15.0,
-      hoursWorked: 5,
-      totalWage: 75,
-      timeline: [
-        { kind: "posted", title: "Job posted by family", timestamp: "2024-02-21 09:15" },
-        { kind: "accepted", title: "Babysitter accepted job", timestamp: "2024-02-21 13:40" },
-        { kind: "clockIn", title: "Clock in recorded", timestamp: "2024-02-23 13:00" },
-        { kind: "clockOut", title: "Clock out recorded", timestamp: "2024-02-23 18:00" },
-      ],
-    },
-  },
-];
+  };
+}
+
+
+const STATUS_TO_DB: Record<JobStatus | "all", string> = {
+  all: "all",
+  Open: "open",
+  Hired: "hired",
+  "In Progress": "active",
+  Completed: "completed",
+  Cancelled: "cancelled",
+};
 
 export default function JobsMonitoringPage() {
-  const [jobs] = useState<Job[]>(initialJobs);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [topSearch, setTopSearch] = useState("");
   const [topFilter, setTopFilter] = useState<"all" | JobStatus>("all");
   const [tableSearch, setTableSearch] = useState("");
@@ -174,15 +131,34 @@ export default function JobsMonitoringPage() {
   const search = (tableSearch || topSearch).toLowerCase();
   const statusFilter = tableFilter !== "all" ? tableFilter : topFilter;
 
-  const filtered = jobs.filter((j) => {
-    const matchesSearch =
-      !search ||
-      j.id.toLowerCase().includes(search) ||
-      j.familyName.toLowerCase().includes(search) ||
-      (j.babysitterName?.toLowerCase().includes(search) ?? false);
-    const matchesStatus = statusFilter === "all" || j.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setLoading(true);
+      setErrorMessage(null);
+      try {
+        const rows = await fetchJobs(STATUS_TO_DB[statusFilter] ?? "all", search);
+        if (!cancelled) setJobs(rows.map(rowToJob));
+      } catch (e) {
+        if (!cancelled)
+          setErrorMessage(e instanceof Error ? e.message : "Failed to load jobs");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [statusFilter, search]);
+
+  const summary = useMemo(() => {
+    const open = jobs.filter((j) => j.status === "Open").length;
+    const inProgress = jobs.filter((j) => j.status === "In Progress").length;
+    const completed = jobs.filter((j) => j.status === "Completed").length;
+    return { open, inProgress, completed, total: jobs.length };
+  }, [jobs]);
+
+  const filtered = jobs;
 
   return (
     <div className="space-y-6">
@@ -196,12 +172,37 @@ export default function JobsMonitoringPage() {
         </p>
       </div>
 
+      {errorMessage ? (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-200"
+        >
+          {errorMessage}
+        </p>
+      ) : null}
+
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SimpleStatCard label="Open Jobs" value="12" valueColor="text-white" />
-        <SimpleStatCard label="In Progress" value="38" valueColor="text-[#7dd3fc]" />
-        <SimpleStatCard label="Completed Today" value="18" valueColor="text-[#34d399]" />
-        <SimpleStatCard label="Total Jobs" value="1,847" valueColor="text-[#c4b5fd]" />
+        <SimpleStatCard
+          label="Open Jobs"
+          value={summary.open.toLocaleString()}
+          valueColor="text-white"
+        />
+        <SimpleStatCard
+          label="In Progress"
+          value={summary.inProgress.toLocaleString()}
+          valueColor="text-[#7dd3fc]"
+        />
+        <SimpleStatCard
+          label="Completed"
+          value={summary.completed.toLocaleString()}
+          valueColor="text-[#34d399]"
+        />
+        <SimpleStatCard
+          label="Total Jobs"
+          value={summary.total.toLocaleString()}
+          valueColor="text-[#c4b5fd]"
+        />
       </div>
 
       {/* Top search card */}
@@ -338,7 +339,7 @@ export default function JobsMonitoringPage() {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-10 text-center text-[14px] text-[#94a3b8]">
-                    No jobs match your filters.
+                    {loading ? "Loading jobs…" : "No jobs match your filters."}
                   </td>
                 </tr>
               )}

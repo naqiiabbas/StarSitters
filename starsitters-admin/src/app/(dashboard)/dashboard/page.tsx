@@ -24,15 +24,11 @@ import {
   OnboardingDetailsModal,
   type OnboardingDetails,
 } from "@/components/ui/OnboardingDetailsModal";
-
-const registrationData = [
-  { month: "Jan", families: 32, babysitters: 27 },
-  { month: "Feb", families: 37, babysitters: 38 },
-  { month: "Mar", families: 37, babysitters: 40 },
-  { month: "Apr", families: 43, babysitters: 53 },
-  { month: "May", families: 41, babysitters: 48 },
-  { month: "Jun", families: 39, babysitters: 53 },
-];
+import {
+  fetchDashboardStats,
+  fetchRegistrationTrend,
+  type DashboardStats,
+} from "@/lib/supabase/admin";
 
 const revenueData = [
   { month: "Jan", revenue: 7800 },
@@ -221,7 +217,67 @@ const recentOnboarding: OnboardingRow[] = [
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
   const [selectedDetails, setSelectedDetails] = useState<OnboardingDetails | null>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [registrationData, setRegistrationData] = useState<
+    { month: string; families: number; babysitters: number }[]
+  >([]);
   useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const s = await fetchDashboardStats();
+        if (!cancelled) setStats(s);
+      } catch (e) {
+        if (!cancelled)
+          setStatsError(e instanceof Error ? e.message : "Failed to load stats");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const trend = await fetchRegistrationTrend();
+        if (cancelled) return;
+        const byDay = new Map<string, { families: number; babysitters: number }>();
+        for (const row of trend) {
+          const key = row.d.slice(0, 10);
+          if (!byDay.has(key)) byDay.set(key, { families: 0, babysitters: 0 });
+          const v = byDay.get(key)!;
+          if (row.role === "family") v.families += row.cnt;
+          if (row.role === "sitter") v.babysitters += row.cnt;
+        }
+        const chart = [...byDay.entries()]
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .slice(-14)
+          .map(([d, v]) => ({
+            month: d.slice(5),
+            families: v.families,
+            babysitters: v.babysitters,
+          }));
+        setRegistrationData(chart);
+      } catch {
+        if (!cancelled) setRegistrationData([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const familiesTotal = stats?.families_total ?? 0;
+  const familiesApproved = stats?.families_approved_bg ?? 0;
+  const familiesPending = stats?.families_pending_bg ?? 0;
+  const sittersTotal = stats?.sitters_total ?? 0;
+  const verifiedRate =
+    familiesTotal > 0
+      ? Math.round((familiesApproved / familiesTotal) * 100)
+      : 0;
 
   return (
     <div className="space-y-6">
@@ -235,33 +291,42 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      {statsError ? (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-200"
+        >
+          {statsError}
+        </p>
+      ) : null}
+
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Total Registered Families"
-          value="247"
-          caption="+12% from last month"
+          value={familiesTotal.toLocaleString()}
+          caption={stats ? "Live from Supabase" : "Loading…"}
           icon={<Users className="w-5 h-5" strokeWidth={1.75} />}
           iconColor="#5eead4"
         />
         <StatCard
           label="Verified Families"
-          value="235"
-          caption="95% verification rate"
+          value={familiesApproved.toLocaleString()}
+          caption={stats ? `${verifiedRate}% verification rate` : "Loading…"}
           icon={<UserCheck className="w-5 h-5" strokeWidth={1.75} />}
           iconColor="#34d399"
         />
         <StatCard
           label="Pending Family Verifications"
-          value="8"
-          caption="Requires attention"
+          value={familiesPending.toLocaleString()}
+          caption={stats ? "Requires attention" : "Loading…"}
           icon={<Clock className="w-5 h-5" strokeWidth={1.75} />}
           iconColor="#fbbf24"
         />
         <StatCard
           label="Total Babysitters"
-          value="189"
-          caption="+8% from last month"
+          value={sittersTotal.toLocaleString()}
+          caption={stats ? "Live from Supabase" : "Loading…"}
           icon={<Smile className="w-5 h-5" strokeWidth={1.75} />}
           iconColor="#c4b5fd"
         />

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Eye, CheckCircle2, XCircle, Search, ChevronDown } from "lucide-react";
 import {
   FamilyDetailsModal,
@@ -8,6 +8,12 @@ import {
 } from "@/components/ui/FamilyDetailsModal";
 import { ApproveVerificationModal } from "@/components/ui/ApproveVerificationModal";
 import { RejectVerificationModal } from "@/components/ui/RejectVerificationModal";
+import {
+  approveFamily,
+  fetchFamilies,
+  rejectFamily,
+  type FamilyRow,
+} from "@/lib/supabase/admin";
 
 type VerificationStatus = "Approved" | "Pending" | "Rejected";
 type BackgroundCheck = "Completed" | "Pending" | "Failed";
@@ -24,78 +30,31 @@ interface Family {
   uploadedDocuments: { name: string; uploadedDate: string }[];
 }
 
-const initialFamilies: Family[] = [
-  {
-    id: "F001",
-    name: "Johnson Family",
-    email: "johnson@email.com",
-    registrationDate: "2024-02-15",
-    verificationStatus: "Approved",
-    backgroundCheck: "Completed",
-    activeJobs: 2,
-    homeAddress: "123 Main Street, Springfield, IL 62701",
-    uploadedDocuments: [
-      { name: "Government ID (Driver's License)", uploadedDate: "2024-02-15" },
-      { name: "Proof of Address", uploadedDate: "2024-02-15" },
-    ],
-  },
-  {
-    id: "F002",
-    name: "Miller Family",
-    email: "miller@email.com",
-    registrationDate: "2024-02-18",
-    verificationStatus: "Pending",
-    backgroundCheck: "Pending",
-    activeJobs: 0,
-    homeAddress: "78 Pine Road, Newton, MA 02458",
-    uploadedDocuments: [
-      { name: "Government ID (Driver's License)", uploadedDate: "2024-02-18" },
-      { name: "Proof of Address", uploadedDate: "2024-02-18" },
-    ],
-  },
-  {
-    id: "F003",
-    name: "Davis Family",
-    email: "davis@email.com",
-    registrationDate: "2024-02-10",
-    verificationStatus: "Approved",
-    backgroundCheck: "Completed",
-    activeJobs: 1,
-    homeAddress: "34 Birch Lane, Somerville, MA 02143",
-    uploadedDocuments: [
-      { name: "Government ID (Passport)", uploadedDate: "2024-02-10" },
-      { name: "Proof of Address", uploadedDate: "2024-02-10" },
-    ],
-  },
-  {
-    id: "F004",
-    name: "Wilson Family",
-    email: "wilson@email.com",
-    registrationDate: "2024-02-20",
-    verificationStatus: "Pending",
-    backgroundCheck: "Pending",
-    activeJobs: 0,
-    homeAddress: "56 Spruce Drive, Medford, MA 02155",
-    uploadedDocuments: [
-      { name: "Government ID (Driver's License)", uploadedDate: "2024-02-20" },
-      { name: "Proof of Address", uploadedDate: "2024-02-20" },
-    ],
-  },
-  {
-    id: "F005",
-    name: "Anderson Family",
-    email: "anderson@email.com",
-    registrationDate: "2024-02-12",
-    verificationStatus: "Approved",
-    backgroundCheck: "Completed",
-    activeJobs: 3,
-    homeAddress: "89 Cedar Avenue, Cambridge, MA 02139",
-    uploadedDocuments: [
-      { name: "Government ID (Driver's License)", uploadedDate: "2024-02-12" },
-      { name: "Proof of Address", uploadedDate: "2024-02-12" },
-    ],
-  },
-];
+function statusFromBg(s: FamilyRow["bg_check_status"]): VerificationStatus {
+  if (s === "approved") return "Approved";
+  if (s === "rejected") return "Rejected";
+  return "Pending";
+}
+
+function bgFromStatus(s: FamilyRow["bg_check_status"]): BackgroundCheck {
+  if (s === "approved") return "Completed";
+  if (s === "rejected") return "Failed";
+  return "Pending";
+}
+
+function rowToFamily(r: FamilyRow): Family {
+  return {
+    id: r.user_id,
+    name: r.full_name?.trim() || r.email || r.user_id.slice(0, 8),
+    email: r.email,
+    registrationDate: r.registered_at ? r.registered_at.slice(0, 10) : "",
+    verificationStatus: statusFromBg(r.bg_check_status),
+    backgroundCheck: bgFromStatus(r.bg_check_status),
+    activeJobs: r.active_jobs,
+    homeAddress: r.home_address ?? "—",
+    uploadedDocuments: [],
+  };
+}
 
 function toProfile(f: Family): FamilyProfile {
   return {
@@ -111,12 +70,39 @@ function toProfile(f: Family): FamilyProfile {
 }
 
 export default function FamiliesPage() {
-  const [families, setFamilies] = useState<Family[]>(initialFamilies);
+  const [families, setFamilies] = useState<Family[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | VerificationStatus>("all");
   const [selected, setSelected] = useState<FamilyProfile | null>(null);
   const [approveTarget, setApproveTarget] = useState<Family | null>(null);
   const [rejectTarget, setRejectTarget] = useState<Family | null>(null);
+
+  const reload = async () => {
+    setLoading(true);
+    setErrorMessage(null);
+    try {
+      const rows = await fetchFamilies();
+      setFamilies(rows.map(rowToFamily));
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "Failed to load families");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void reload();
+  }, []);
+
+  const summary = useMemo(() => {
+    const total = families.length;
+    const verified = families.filter((f) => f.verificationStatus === "Approved").length;
+    const pending = families.filter((f) => f.verificationStatus === "Pending").length;
+    const rejected = families.filter((f) => f.verificationStatus === "Rejected").length;
+    return { total, verified, pending, rejected };
+  }, [families]);
 
   const filtered = families.filter((f) => {
     const q = search.toLowerCase();
@@ -130,18 +116,22 @@ export default function FamiliesPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const updateStatus = (id: string, status: VerificationStatus) => {
-    setFamilies((prev) =>
-      prev.map((f) =>
-        f.id === id
-          ? {
-              ...f,
-              verificationStatus: status,
-              backgroundCheck: status === "Approved" ? "Completed" : f.backgroundCheck,
-            }
-          : f
-      )
-    );
+  const handleApprove = async (id: string) => {
+    try {
+      await approveFamily(id);
+      await reload();
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "Approve failed");
+    }
+  };
+
+  const handleReject = async (id: string, reason: string) => {
+    try {
+      await rejectFamily(id, reason || "Rejected by admin");
+      await reload();
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "Reject failed");
+    }
   };
 
   return (
@@ -156,12 +146,37 @@ export default function FamiliesPage() {
         </p>
       </div>
 
+      {errorMessage ? (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-200"
+        >
+          {errorMessage}
+        </p>
+      ) : null}
+
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SimpleStatCard label="Total Families" value="247" valueColor="text-white" />
-        <SimpleStatCard label="Verified" value="235" valueColor="text-[#34d399]" />
-        <SimpleStatCard label="Pending" value="8" valueColor="text-[#c4b5fd]" />
-        <SimpleStatCard label="Rejected" value="4" valueColor="text-[#ef4444]" />
+        <SimpleStatCard
+          label="Total Families"
+          value={summary.total.toLocaleString()}
+          valueColor="text-white"
+        />
+        <SimpleStatCard
+          label="Verified"
+          value={summary.verified.toLocaleString()}
+          valueColor="text-[#34d399]"
+        />
+        <SimpleStatCard
+          label="Pending"
+          value={summary.pending.toLocaleString()}
+          valueColor="text-[#c4b5fd]"
+        />
+        <SimpleStatCard
+          label="Rejected"
+          value={summary.rejected.toLocaleString()}
+          valueColor="text-[#ef4444]"
+        />
       </div>
 
       {/* Table card */}
@@ -263,7 +278,7 @@ export default function FamiliesPage() {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-10 text-center text-[14px] text-[#94a3b8]">
-                    No families match your filters.
+                    {loading ? "Loading families…" : "No families match your filters."}
                   </td>
                 </tr>
               )}
@@ -282,7 +297,11 @@ export default function FamiliesPage() {
         isOpen={approveTarget !== null}
         onClose={() => setApproveTarget(null)}
         onConfirm={() => {
-          if (approveTarget) updateStatus(approveTarget.id, "Approved");
+          if (approveTarget) {
+            const id = approveTarget.id;
+            setApproveTarget(null);
+            void handleApprove(id);
+          }
         }}
       />
 
@@ -290,7 +309,11 @@ export default function FamiliesPage() {
         isOpen={rejectTarget !== null}
         onClose={() => setRejectTarget(null)}
         onConfirm={() => {
-          if (rejectTarget) updateStatus(rejectTarget.id, "Rejected");
+          if (rejectTarget) {
+            const id = rejectTarget.id;
+            setRejectTarget(null);
+            void handleReject(id, "Background check rejected by admin");
+          }
         }}
         familyName={rejectTarget?.name ?? ""}
         email={rejectTarget?.email ?? ""}

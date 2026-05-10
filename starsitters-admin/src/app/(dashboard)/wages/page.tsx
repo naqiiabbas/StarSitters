@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { DollarSign, Clock, ChevronDown, Save } from "lucide-react";
+import { fetchWageTiers, updateWageTiers } from "@/lib/supabase/admin";
 
 type TimeRounding = "exact" | "round-up" | "round-15" | "round-30";
 type Overtime = "disabled" | "1.5x" | "2x";
@@ -53,13 +54,55 @@ export default function WagesPage() {
   const [draftRates, setDraftRates] = useState<Rates>(DEFAULT_RATES);
   const [rounding, setRounding] = useState<TimeRounding>("exact");
   const [overtime, setOvertime] = useState<Overtime>("disabled");
+  const [busy, setBusy] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const tiers = await fetchWageTiers();
+        const today = new Date().toISOString().slice(0, 10);
+        const active = tiers.filter(
+          (t: { effective_from: string }) => t.effective_from <= today,
+        );
+        const latestByMin: Record<number, number> = {};
+        for (const t of active as { min_age: number; hourly_rate: number | string; effective_from: string }[]) {
+          latestByMin[t.min_age] = Number(t.hourly_rate);
+        }
+        const next: Rates = {
+          age11_12: latestByMin[11] ?? DEFAULT_RATES.age11_12,
+          age13_14: latestByMin[13] ?? DEFAULT_RATES.age13_14,
+          age15_17: latestByMin[15] ?? DEFAULT_RATES.age15_17,
+        };
+        setRates(next);
+        setDraftRates(next);
+      } catch (e) {
+        setErrorMessage(e instanceof Error ? e.message : "Failed to load wage tiers");
+      }
+    })();
+  }, []);
 
   const update = <K extends keyof Rates>(key: K, value: number) => {
     setDraftRates({ ...draftRates, [key]: value });
   };
 
-  const handleSave = () => {
-    setRates(draftRates);
+  const handleSave = async () => {
+    setBusy(true);
+    setErrorMessage(null);
+    try {
+      await updateWageTiers([
+        { min_age: 11, max_age: 12, hourly_rate: draftRates.age11_12 },
+        { min_age: 13, max_age: 14, hourly_rate: draftRates.age13_14 },
+        { min_age: 15, max_age: 17, hourly_rate: draftRates.age15_17 },
+      ]);
+      setRates(draftRates);
+      setSavedAt(new Date().toLocaleTimeString());
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleCancel = () => {
@@ -143,14 +186,29 @@ export default function WagesPage() {
           </div>
         </div>
 
+        {errorMessage ? (
+          <p
+            role="alert"
+            className="mt-4 rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-200"
+          >
+            {errorMessage}
+          </p>
+        ) : null}
+        {savedAt ? (
+          <p className="mt-4 text-sm text-[#34d399]">
+            Saved to Supabase at {savedAt} (effective tomorrow per BACKEND.md §11).
+          </p>
+        ) : null}
+
         {/* Action buttons */}
         <div className="mt-7 flex items-center gap-3">
           <button
-            onClick={handleSave}
-            className="inline-flex items-center gap-2 px-5 h-[42px] bg-[#34d399]/20 hover:bg-[#34d399]/30 border border-[#34d399]/40 text-[#34d399] text-[14px] font-semibold rounded-[10px] transition-all"
+            onClick={() => void handleSave()}
+            disabled={busy}
+            className="inline-flex items-center gap-2 px-5 h-[42px] bg-[#34d399]/20 hover:bg-[#34d399]/30 border border-[#34d399]/40 text-[#34d399] text-[14px] font-semibold rounded-[10px] transition-all disabled:opacity-60"
           >
             <Save className="w-4 h-4" strokeWidth={2} />
-            Save Changes
+            {busy ? "Saving…" : "Save Changes"}
           </button>
           <button
             onClick={handleCancel}

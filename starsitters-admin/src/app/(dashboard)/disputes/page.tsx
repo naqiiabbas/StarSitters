@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Eye, Search, ChevronDown, AlertTriangle } from "lucide-react";
 import {
   DisputeDetailsModal,
@@ -8,6 +8,61 @@ import {
   type DisputePriority,
   type DisputeStatus,
 } from "@/components/ui/DisputeDetailsModal";
+import {
+  fetchDisputes,
+  resolveDispute,
+  setDisputeStatus,
+  type DisputeRow,
+} from "@/lib/supabase/admin";
+
+function priorityFromDb(p: DisputeRow["priority"]): DisputePriority {
+  if (p === "high") return "High";
+  if (p === "medium") return "Medium";
+  return "Low";
+}
+
+function statusFromDb(s: DisputeRow["status"]): DisputeStatus {
+  if (s === "resolved") return "Resolved";
+  if (s === "investigating") return "Investigating";
+  return "Open";
+}
+
+function statusToDb(s: DisputeStatus): "open" | "investigating" | "resolved" {
+  if (s === "Resolved") return "resolved";
+  if (s === "Investigating") return "investigating";
+  return "open";
+}
+
+function rowToDispute(r: DisputeRow): Dispute {
+  const priority = priorityFromDb(r.priority);
+  const status = statusFromDb(r.status);
+  const reportedBy =
+    r.reporter_name?.trim() || r.reporter_email || `${r.reported_by_role} ${r.reported_by_user_id.slice(0, 6)}`;
+  return {
+    id: r.id,
+    jobId: r.job_id,
+    reportedBy,
+    issueType: r.issue_type,
+    reportedDate: (r.created_at ?? "").replace("T", " ").slice(0, 16),
+    priority,
+    status,
+    detail: {
+      id: r.id,
+      jobId: r.job_id,
+      reportedBy,
+      issueType: r.issue_type,
+      priority,
+      status,
+      description: r.description ?? "",
+      clockIn: "",
+      clockOut: "",
+      calculatedHours: "—",
+      calculatedWage: "—",
+      messageHistory: [],
+      resolutionNotes: r.resolution_notes ?? undefined,
+    } satisfies DisputeDetail,
+  };
+}
 
 interface Dispute {
   id: string;
@@ -20,162 +75,60 @@ interface Dispute {
   detail: DisputeDetail;
 }
 
-const initialDisputes: Dispute[] = [
-  {
-    id: "D001",
-    jobId: "J1247",
-    reportedBy: "Johnson Family",
-    issueType: "Time Discrepancy",
-    reportedDate: "2024-02-24 18:30",
-    priority: "High",
-    status: "Open",
-    detail: {
-      id: "D001",
-      jobId: "J1247",
-      reportedBy: "Johnson Family",
-      issueType: "Time Discrepancy",
-      priority: "High",
-      status: "Open",
-      description: "Clock-out time doesn't match actual end time",
-      clockIn: "2024-02-24 14:00",
-      clockOut: "2024-02-24 18:00",
-      calculatedHours: "4.0 hours",
-      calculatedWage: "$60.00",
-      messageHistory: [
-        {
-          author: "Johnson Family",
-          body: "The session actually ended at 17:45, not 18:00",
-          timestamp: "2024-02-24 18:30",
-        },
-      ],
-    },
-  },
-  {
-    id: "D002",
-    jobId: "J1245",
-    reportedBy: "Sarah Davis (Babysitter)",
-    issueType: "Payment Issue",
-    reportedDate: "2024-02-23 20:15",
-    priority: "Medium",
-    status: "Investigating",
-    detail: {
-      id: "D002",
-      jobId: "J1245",
-      reportedBy: "Sarah Davis (Babysitter)",
-      issueType: "Payment Issue",
-      priority: "Medium",
-      status: "Investigating",
-      description: "Wage calculation appears incorrect",
-      clockIn: "2024-02-23 14:00",
-      clockOut: "2024-02-23 18:00",
-      calculatedHours: "4.0 hours",
-      calculatedWage: "$60.00",
-      messageHistory: [
-        {
-          author: "Sarah Davis",
-          body: "I worked 4 hours but was only paid for 3.5",
-          timestamp: "2024-02-23 20:15",
-        },
-      ],
-    },
-  },
-  {
-    id: "D003",
-    jobId: "J1240",
-    reportedBy: "Miller Family",
-    issueType: "No-Show",
-    reportedDate: "2024-02-22 15:00",
-    priority: "High",
-    status: "Resolved",
-    detail: {
-      id: "D003",
-      jobId: "J1240",
-      reportedBy: "Miller Family",
-      issueType: "No-Show",
-      priority: "High",
-      status: "Resolved",
-      description: "Babysitter did not arrive at scheduled time",
-      clockIn: "2024-02-22 14:00",
-      clockOut: "2024-02-22 18:00",
-      calculatedHours: "4.0 hours",
-      calculatedWage: "$60.00",
-      messageHistory: [
-        {
-          author: "Miller Family",
-          body: "The session actually ended at 17:45, not 18:00",
-          timestamp: "2024-02-22 15:00",
-        },
-      ],
-      resolutionNotes:
-        "Time adjusted to 3.75 hours. Wage recalculated to $56.25. Family notified.",
-    },
-  },
-  {
-    id: "D004",
-    jobId: "J1238",
-    reportedBy: "Jake Thompson (Babysitter)",
-    issueType: "Safety Concern",
-    reportedDate: "2024-02-21 14:30",
-    priority: "High",
-    status: "Resolved",
-    detail: {
-      id: "D004",
-      jobId: "J1238",
-      reportedBy: "Jake Thompson (Babysitter)",
-      issueType: "Safety Concern",
-      priority: "High",
-      status: "Resolved",
-      description: "Reported unsafe situation at the family residence",
-      clockIn: "2024-02-21 09:00",
-      clockOut: "2024-02-21 12:00",
-      calculatedHours: "3.0 hours",
-      calculatedWage: "$45.00",
-      messageHistory: [
-        {
-          author: "Jake Thompson",
-          body: "There was no one home when I arrived for the scheduled session",
-          timestamp: "2024-02-21 14:30",
-        },
-      ],
-      resolutionNotes:
-        "Family contacted and warned. Session marked complete. Babysitter compensated for full booked hours.",
-    },
-  },
-];
 
 export default function DisputesPage() {
-  const [disputes, setDisputes] = useState<Dispute[]>(initialDisputes);
+  const [disputes, setDisputes] = useState<Dispute[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | DisputeStatus>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const selected = disputes.find((d) => d.id === selectedId) ?? null;
 
-  const handleResolve = (notes: string) => {
-    if (!selectedId) return;
-    setDisputes((prev) =>
-      prev.map((d) =>
-        d.id === selectedId
-          ? {
-              ...d,
-              status: "Resolved",
-              detail: { ...d.detail, status: "Resolved", resolutionNotes: notes },
-            }
-          : d,
-      ),
-    );
-    setSelectedId(null);
+  const reload = async () => {
+    setLoading(true);
+    setErrorMessage(null);
+    try {
+      const rows = await fetchDisputes();
+      setDisputes(rows.map(rowToDispute));
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "Failed to load disputes");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleUpdateStatus = (status: DisputeStatus) => {
+  useEffect(() => {
+    void reload();
+  }, []);
+
+  const summary = useMemo(() => {
+    const open = disputes.filter((d) => d.status === "Open").length;
+    const investigating = disputes.filter((d) => d.status === "Investigating").length;
+    const resolved = disputes.filter((d) => d.status === "Resolved").length;
+    return { open, investigating, resolved, total: disputes.length };
+  }, [disputes]);
+
+  const handleResolve = async (notes: string) => {
     if (!selectedId) return;
-    setDisputes((prev) =>
-      prev.map((d) =>
-        d.id === selectedId
-          ? { ...d, status, detail: { ...d.detail, status } }
-          : d,
-      ),
-    );
+    try {
+      await resolveDispute(selectedId, notes);
+      setSelectedId(null);
+      await reload();
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "Resolve failed");
+    }
+  };
+
+  const handleUpdateStatus = async (status: DisputeStatus) => {
+    if (!selectedId) return;
+    try {
+      await setDisputeStatus(selectedId, statusToDb(status));
+      await reload();
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "Update failed");
+    }
   };
 
   const filtered = disputes.filter((d) => {
@@ -202,12 +155,37 @@ export default function DisputesPage() {
         </p>
       </div>
 
+      {errorMessage ? (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-200"
+        >
+          {errorMessage}
+        </p>
+      ) : null}
+
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SimpleStatCard label="Open Disputes" value="3" valueColor="text-white" />
-        <SimpleStatCard label="Investigating" value="5" valueColor="text-[#3b82f6]" />
-        <SimpleStatCard label="Resolved This Month" value="28" valueColor="text-[#34d399]" />
-        <SimpleStatCard label="Avg Resolution Time" value="1.8 days" valueColor="text-[#c4b5fd]" />
+        <SimpleStatCard
+          label="Open Disputes"
+          value={summary.open.toLocaleString()}
+          valueColor="text-white"
+        />
+        <SimpleStatCard
+          label="Investigating"
+          value={summary.investigating.toLocaleString()}
+          valueColor="text-[#3b82f6]"
+        />
+        <SimpleStatCard
+          label="Resolved"
+          value={summary.resolved.toLocaleString()}
+          valueColor="text-[#34d399]"
+        />
+        <SimpleStatCard
+          label="Total"
+          value={summary.total.toLocaleString()}
+          valueColor="text-[#c4b5fd]"
+        />
       </div>
 
       {/* Table card */}
@@ -291,7 +269,7 @@ export default function DisputesPage() {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-10 text-center text-[14px] text-[#94a3b8]">
-                    No disputes match your filters.
+                    {loading ? "Loading disputes…" : "No disputes match your filters."}
                   </td>
                 </tr>
               )}

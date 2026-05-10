@@ -1,7 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Search, ChevronDown, CheckCircle2, Clock, XCircle } from "lucide-react";
+import {
+  fetchNotificationLogs,
+  type NotificationLogRow,
+} from "@/lib/supabase/admin";
 
 type NotificationRole = "Family" | "Babysitter";
 type NotificationStatus = "Delivered" | "Sent" | "Failed";
@@ -16,69 +20,60 @@ interface NotificationLog {
   status: NotificationStatus;
 }
 
-const initialNotifications: NotificationLog[] = [
-  {
-    id: "N001",
-    recipient: "Johnson Family",
-    role: "Family",
-    triggerType: "Job Completed",
-    message: "Your babysitting job with Sarah Davis has been completed",
-    sentDate: "2024-02-24 18:05",
-    status: "Delivered",
-  },
-  {
-    id: "N002",
-    recipient: "Sarah Davis",
-    role: "Babysitter",
-    triggerType: "Payment Processed",
-    message: "Your payment of $60.00 has been processed",
-    sentDate: "2024-02-24 18:10",
-    status: "Delivered",
-  },
-  {
-    id: "N003",
-    recipient: "Emma Martinez",
-    role: "Babysitter",
-    triggerType: "Certification Approved",
-    message: "Your CPR Certification has been approved",
-    sentDate: "2024-02-24 16:30",
-    status: "Delivered",
-  },
-  {
-    id: "N004",
-    recipient: "Miller Family",
-    role: "Family",
-    triggerType: "Account Verified",
-    message: "Your account has been verified and is now active",
-    sentDate: "2024-02-24 14:20",
-    status: "Delivered",
-  },
-  {
-    id: "N005",
-    recipient: "Jake Thompson",
-    role: "Babysitter",
-    triggerType: "New Job Available",
-    message: "A new babysitting job is available in your area",
-    sentDate: "2024-02-24 12:00",
-    status: "Sent",
-  },
-  {
-    id: "N006",
-    recipient: "Wilson Family",
-    role: "Family",
-    triggerType: "Verification Pending",
-    message: "Your account verification is pending review",
-    sentDate: "2024-02-24 10:15",
-    status: "Failed",
-  },
-];
+function mapDeliveryToStatus(ds: string | null | undefined): NotificationStatus {
+  const s = (ds ?? "pending").toLowerCase();
+  if (s === "sent" || s === "mock_ok" || s === "partial") return "Delivered";
+  if (s === "failed" || s === "config_missing" || s === "invalid_sa_json") return "Failed";
+  if (s === "no_devices" || s === "pending") return "Sent";
+  return "Sent";
+}
+
+function mapRole(r: string | null | undefined): NotificationRole {
+  if (r === "sitter") return "Babysitter";
+  return "Family";
+}
+
+function mapRow(r: NotificationLogRow): NotificationLog {
+  const u = r.users;
+  const email = Array.isArray(u) ? u[0]?.email : u?.email;
+  const roleRaw = Array.isArray(u) ? u[0]?.role : u?.role;
+  return {
+    id: r.id.slice(0, 8),
+    recipient: email ?? r.user_id.slice(0, 8),
+    role: mapRole(roleRaw ?? null),
+    triggerType: r.type,
+    message: [r.title, r.body].filter(Boolean).join(" — ") || "(no text)",
+    sentDate: new Date(r.created_at).toLocaleString(),
+    status: mapDeliveryToStatus(r.delivery_status),
+  };
+}
 
 export default function NotificationsPage() {
+  const [rows, setRows] = useState<NotificationLog[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | NotificationRole>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | NotificationStatus>("all");
 
-  const filtered = initialNotifications.filter((n) => {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await fetchNotificationLogs(500);
+        if (cancelled) return;
+        setRows(raw.map(mapRow));
+        setLoadError(null);
+      } catch (e) {
+        if (cancelled) return;
+        setLoadError(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const filtered = rows.filter((n) => {
     const q = search.toLowerCase();
     const matchesSearch =
       !q ||
@@ -90,6 +85,10 @@ export default function NotificationsPage() {
     const matchesStatus = statusFilter === "all" || n.status === statusFilter;
     return matchesSearch && matchesRole && matchesStatus;
   });
+
+  const delivered = rows.filter((r) => r.status === "Delivered").length;
+  const failed = rows.filter((r) => r.status === "Failed").length;
+  const pending = rows.filter((r) => r.status === "Sent").length;
 
   return (
     <div className="space-y-6">
@@ -103,12 +102,34 @@ export default function NotificationsPage() {
         </p>
       </div>
 
+      {loadError && (
+        <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {loadError}
+        </div>
+      )}
+
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SimpleStatCard label="Total Sent Today" value="847" valueColor="text-white" />
-        <SimpleStatCard label="Delivered" value="832" valueColor="text-[#3b82f6]" />
-        <SimpleStatCard label="Pending" value="12" valueColor="text-[#34d399]" />
-        <SimpleStatCard label="Failed Delivery" value="3" valueColor="text-[#ef4444]" />
+        <SimpleStatCard
+          label="Loaded rows"
+          value={String(rows.length)}
+          valueColor="text-white"
+        />
+        <SimpleStatCard
+          label="Delivered / OK"
+          value={String(delivered)}
+          valueColor="text-[#3b82f6]"
+        />
+        <SimpleStatCard
+          label="Pending / sent"
+          value={String(pending)}
+          valueColor="text-[#34d399]"
+        />
+        <SimpleStatCard
+          label="Failed"
+          value={String(failed)}
+          valueColor="text-[#ef4444]"
+        />
       </div>
 
       {/* Table card */}

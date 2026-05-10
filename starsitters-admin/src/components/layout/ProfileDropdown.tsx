@@ -1,9 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { User, LogOut, Settings } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 interface ProfileDropdownProps {
   isOpen: boolean;
@@ -12,12 +13,40 @@ interface ProfileDropdownProps {
 
 export function ProfileDropdown({ isOpen, onClose }: ProfileDropdownProps) {
   const router = useRouter();
+  const [name, setName] = useState<string>("Admin");
+  const [email, setEmail] = useState<string>("");
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const supabase = createClient();
+    void (async () => {
+      const { data } = await supabase.auth.getUser();
+      const u = data.user;
+      if (!u) return;
+      setEmail(u.email ?? "");
+      const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
+      const metaName = typeof meta.full_name === "string" ? meta.full_name : null;
+      if (metaName) {
+        setName(metaName);
+        return;
+      }
+      const { data: profile } = await supabase
+        .from("users")
+        .select("full_name")
+        .eq("id", u.id)
+        .maybeSingle();
+      if (profile?.full_name) setName(profile.full_name);
+    })();
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     onClose();
+    const supabase = createClient();
+    await supabase.auth.signOut();
     router.push("/");
+    router.refresh();
   };
 
   return (
@@ -33,11 +62,9 @@ export function ProfileDropdown({ isOpen, onClose }: ProfileDropdownProps) {
           </div>
           <div className="overflow-hidden">
             <h3 className="text-white font-semibold text-[15px] truncate">
-              Leah Pierce
+              {name}
             </h3>
-            <p className="text-[#94a3b8] text-[13px] truncate">
-              leah.pierce@starsitters.com
-            </p>
+            <p className="text-[#94a3b8] text-[13px] truncate">{email}</p>
           </div>
         </div>
 

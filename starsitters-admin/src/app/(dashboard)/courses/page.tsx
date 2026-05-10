@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Search,
@@ -15,6 +15,14 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
+import {
+  adminDeleteCourse,
+  adminUpdateCourse,
+  courseDbStatusFromUi,
+  courseUiStatusFromDb,
+  fetchAdminCoursesWithStats,
+  type AdminCourseWithStats,
+} from "@/lib/supabase/admin";
 import {
   ViewCourseModal,
   type ViewCourseData,
@@ -39,6 +47,7 @@ interface Course {
   status: CourseStatus;
   createdDate: string;
   description: string;
+  modulesList: string[];
   modulesCount: number;
   price: number;
   requirements: string;
@@ -47,80 +56,38 @@ interface Course {
   completion: number;
 }
 
-const initialCourses: Course[] = [
-  {
-    id: "C001",
-    title: "CPR & First Aid Certification",
-    category: "Safety",
-    instructor: "Dr. Sarah Johnson",
-    durationHours: 4,
-    level: "Beginner",
-    enrolled: 145,
-    status: "Active",
-    createdDate: "2024-01-15",
-    description: "Comprehensive training on CPR techniques and first aid procedures for emergencies involving children.",
-    modulesCount: 6,
-    price: 49.99,
-    requirements: "No prior experience required",
-    learningObjectives: "Learn life-saving CPR techniques, understand emergency response procedures, and obtain certification.",
-    providesCertificate: true,
-    completion: 87,
-  },
-  {
-    id: "C002",
-    title: "Infant Care Basics",
-    category: "Child Care",
-    instructor: "Mary Williams",
-    durationHours: 3,
-    level: "Beginner",
-    enrolled: 98,
-    status: "Active",
-    createdDate: "2024-01-08",
-    description: "Foundational knowledge of infant feeding, sleeping routines, hygiene, and safety best practices.",
-    modulesCount: 4,
-    price: 34.99,
-    requirements: "No prior experience required",
-    learningObjectives: "Build a confident foundation in newborn-to-12-month care, including feeding, soothing, and safety.",
-    providesCertificate: true,
-    completion: 84,
-  },
-  {
-    id: "C003",
-    title: "Child Behavior Management",
-    category: "Behavioral",
-    instructor: "Dr. Michael Chen",
-    durationHours: 5,
-    level: "Intermediate",
-    enrolled: 67,
-    status: "Active",
-    createdDate: "2024-01-22",
-    description: "Strategies for managing challenging behaviors and fostering positive child development.",
-    modulesCount: 5,
-    price: 59.99,
-    requirements: "Completion of Infant Care Basics or equivalent experience",
-    learningObjectives: "Develop techniques for de-escalation, positive reinforcement, and behavior tracking.",
-    providesCertificate: true,
-    completion: 76,
-  },
-  {
-    id: "C004",
-    title: "Advanced Nutrition for Kids",
-    category: "Health",
-    instructor: "Emma Thompson",
-    durationHours: 6,
-    level: "Advanced",
-    enrolled: 34,
-    status: "Draft",
-    createdDate: "2024-02-15",
-    description: "Deep dive into childhood nutrition, dietary needs by age group, and meal planning fundamentals.",
-    modulesCount: 7,
-    price: 79.99,
-    requirements: "Familiarity with basic nutrition principles",
-    learningObjectives: "Plan nutritionally balanced meals tailored to age groups and dietary needs.",
-    providesCertificate: false,
-    completion: 0,
-  },
-];
+function mapRowToCourse(c: AdminCourseWithStats): Course {
+  const mods = Array.isArray(c.modules) ? c.modules : [];
+  const st = courseUiStatusFromDb(c.status);
+  const completion = Math.min(100, Math.round(c.completion_avg));
+  return {
+    id: c.id,
+    title: c.name,
+    category: c.category,
+    instructor: c.instructor?.trim() ? c.instructor : "—",
+    durationHours: Number(c.duration_hours ?? 0),
+    level: (c.level as Level) ?? "Beginner",
+    enrolled: c.submissions_count,
+    status: st,
+    createdDate: (c.created_at ?? "").slice(0, 10),
+    description: c.description ?? "",
+    modulesList: mods.length ? [...mods] : [],
+    modulesCount: mods.length || 0,
+    price: Number(c.price ?? 0),
+    requirements: c.requirements ?? "",
+    learningObjectives: c.learning_objectives ?? "",
+    providesCertificate: c.provides_certificate,
+    completion,
+  };
+}
+
+function adjustModulesList(existing: string[], count: number): string[] {
+  const out = [...existing];
+  while (out.length < count) {
+    out.push(`Module ${out.length + 1}`);
+  }
+  return out.slice(0, Math.max(0, count));
+}
 
 function toViewData(c: Course): ViewCourseData {
   return {
@@ -148,7 +115,7 @@ function toEditData(c: Course): EditCourseData {
     description: c.description,
     category: c.category,
     level: c.level,
-    instructor: c.instructor,
+    instructor: c.instructor === "—" ? "" : c.instructor,
     duration: `${c.durationHours} hours`,
     modulesCount: c.modulesCount,
     price: c.price,
@@ -160,16 +127,60 @@ function toEditData(c: Course): EditCourseData {
 }
 
 export default function CoursesPage() {
-  const [courses, setCourses] = useState<Course[]>(initialCourses);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | CourseStatus>("all");
   const [viewTarget, setViewTarget] = useState<Course | null>(null);
   const [editTarget, setEditTarget] = useState<Course | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Course | null>(null);
 
-  const updateCourse = (id: string, patch: Partial<Course>) => {
-    setCourses((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-    setViewTarget((prev) => (prev && prev.id === id ? { ...prev, ...patch } : prev));
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const rows = await fetchAdminCoursesWithStats();
+      setCourses(rows.map(mapRowToCourse));
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Failed to load courses");
+      setCourses([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const updateCourse = async (id: string, patch: Partial<Course>) => {
+    const prev = courses.find((c) => c.id === id);
+    if (!prev) return;
+    const next: Course = { ...prev, ...patch };
+    const modules = adjustModulesList(next.modulesList, next.modulesCount);
+    const merged: Course = { ...next, modulesList: modules, modulesCount: modules.length };
+    try {
+      await adminUpdateCourse(id, {
+        name: merged.title,
+        category: merged.category,
+        status: courseDbStatusFromUi(merged.status),
+        description: merged.description || null,
+        modules,
+        instructor: merged.instructor && merged.instructor !== "—" ? merged.instructor : null,
+        duration_hours: merged.durationHours,
+        level: merged.level,
+        price: merged.price,
+        requirements: merged.requirements || null,
+        learning_objectives: merged.learningObjectives || null,
+        provides_certificate: merged.providesCertificate,
+      });
+      await refresh();
+      setViewTarget((vt) => (vt && vt.id === id ? merged : vt));
+      setEditTarget((et) => (et && et.id === id ? merged : et));
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Update failed");
+    }
   };
 
   const filtered = courses.filter((c) => {
@@ -188,13 +199,17 @@ export default function CoursesPage() {
   const draftCourses = courses.filter((c) => c.status === "Draft").length;
   const totalEnrolled = courses.reduce((sum, c) => sum + c.enrolled, 0);
 
-  const handleDelete = (id: string) => {
-    setCourses((prev) => prev.filter((c) => c.id !== id));
+  const handleDelete = async (id: string) => {
+    try {
+      await adminDeleteCourse(id);
+      await refresh();
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Delete failed");
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <h1 className="text-[32px] leading-[40px] font-bold text-white">
@@ -203,6 +218,14 @@ export default function CoursesPage() {
           <p className="mt-1 text-[15px] text-[#94a3b8]">
             Manage training courses and certifications for babysitters
           </p>
+          {loadError && (
+            <p className="mt-2 text-[13px] text-red-400" role="alert">
+              {loadError}
+            </p>
+          )}
+          {loading && (
+            <p className="mt-2 text-[13px] text-[#94a3b8]">Loading courses…</p>
+          )}
         </div>
         <Link
           href="/courses/create"
@@ -213,7 +236,6 @@ export default function CoursesPage() {
         </Link>
       </div>
 
-      {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Total Courses"
@@ -239,13 +261,12 @@ export default function CoursesPage() {
         <StatCard
           label="Total Enrolled"
           value={String(totalEnrolled)}
-          caption="Across all courses"
+          caption="Certification submissions (all statuses)"
           icon={<Users className="w-5 h-5" strokeWidth={1.75} />}
           iconColor="#cbd5e1"
         />
       </div>
 
-      {/* Search + filter card */}
       <section className="bg-[#1e293b]/60 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.6)]">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
@@ -280,7 +301,6 @@ export default function CoursesPage() {
         </div>
       </section>
 
-      {/* Courses table */}
       <section className="bg-[#1e293b]/60 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.6)]">
         <h2 className="text-[18px] leading-[26px] font-semibold text-white mb-5">
           Courses ({filtered.length})
@@ -339,12 +359,14 @@ export default function CoursesPage() {
                   <td className="py-4 pl-4">
                     <div className="flex items-center justify-end gap-3">
                       <button
+                        type="button"
                         onClick={() => setViewTarget(c)}
                         className="text-[14px] text-white hover:text-[#b8e0f0] transition-colors"
                       >
                         View
                       </button>
                       <button
+                        type="button"
                         onClick={() => setEditTarget(c)}
                         aria-label="Edit course"
                         className="p-1 text-[#94a3b8] hover:text-white transition-colors"
@@ -352,6 +374,7 @@ export default function CoursesPage() {
                         <Pencil className="w-[16px] h-[16px]" strokeWidth={1.75} />
                       </button>
                       <button
+                        type="button"
                         onClick={() => setDeleteTarget(c)}
                         aria-label="Delete course"
                         className="p-1 text-[#ef4444] hover:text-[#dc2626] transition-colors"
@@ -362,7 +385,7 @@ export default function CoursesPage() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-10 text-center text-[14px] text-[#94a3b8]">
                     No courses match your filters.
@@ -379,7 +402,7 @@ export default function CoursesPage() {
         onClose={() => setViewTarget(null)}
         data={viewTarget ? toViewData(viewTarget) : null}
         onStatusChange={(status) => {
-          if (viewTarget) updateCourse(viewTarget.id, { status });
+          if (viewTarget) void updateCourse(viewTarget.id, { status });
         }}
         onEdit={() => {
           if (viewTarget) {
@@ -397,20 +420,23 @@ export default function CoursesPage() {
         onSubmit={(data) => {
           if (!editTarget) return;
           const hours = parseFloat(data.duration) || editTarget.durationHours;
-          updateCourse(editTarget.id, {
+          const modulesList = adjustModulesList(editTarget.modulesList, data.modulesCount);
+          void updateCourse(editTarget.id, {
             title: data.title,
             description: data.description,
             category: data.category,
             level: data.level as Level,
-            instructor: data.instructor,
+            instructor: data.instructor.trim() || "—",
             durationHours: hours,
             modulesCount: data.modulesCount,
+            modulesList,
             price: data.price,
             requirements: data.requirements,
             learningObjectives: data.learningObjectives,
             providesCertificate: data.providesCertificate,
             status: data.status,
           });
+          setEditTarget(null);
         }}
       />
 
@@ -418,7 +444,8 @@ export default function CoursesPage() {
         isOpen={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => {
-          if (deleteTarget) handleDelete(deleteTarget.id);
+          if (deleteTarget) void handleDelete(deleteTarget.id);
+          setDeleteTarget(null);
         }}
         courseName={deleteTarget?.title ?? ""}
         category={deleteTarget?.category ?? ""}
@@ -490,8 +517,8 @@ function LevelBadge({ level }: { level: Level }) {
     level === "Beginner"
       ? "bg-[#34d399]/15 border-[#34d399]/25 text-[#34d399]"
       : level === "Intermediate"
-      ? "bg-[#7dd3fc]/15 border-[#7dd3fc]/30 text-[#7dd3fc]"
-      : "bg-[#a78bfa]/15 border-[#a78bfa]/30 text-[#c4b5fd]";
+        ? "bg-[#7dd3fc]/15 border-[#7dd3fc]/30 text-[#7dd3fc]"
+        : "bg-[#a78bfa]/15 border-[#a78bfa]/30 text-[#c4b5fd]";
   return (
     <span
       className={`inline-flex items-center px-2.5 py-1 rounded-md border text-[12px] font-medium ${styles}`}

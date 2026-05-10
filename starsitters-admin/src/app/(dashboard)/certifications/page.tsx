@@ -1,7 +1,17 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Eye, Trash2, CheckCircle2, XCircle } from "lucide-react";
+import {
+  adminDeleteCourse,
+  approveCertificationSubmission,
+  courseCertTabStatusFromDb,
+  fetchAdminCoursesWithStats,
+  fetchCertificationSubmissionsAdmin,
+  rejectCertificationSubmission,
+  type AdminCourseWithStats,
+  type CertificationSubmissionRow,
+} from "@/lib/supabase/admin";
 import {
   CourseDetailsModal,
   type CourseProfile,
@@ -28,52 +38,21 @@ interface Course {
   modules: string[];
 }
 
-const initialCourses: Course[] = [
-  {
-    id: "C001",
-    name: "CPR & First Aid Certification",
-    category: "Safety",
-    createdDate: "2024-01-05",
-    status: "Published",
-    enrolled: 145,
-    completion: 87,
-    description: "This comprehensive course covers essential skills and knowledge required for safety in childcare settings.",
-    modules: ["Module 1: Introduction", "Module 2: Core Concepts", "Module 3: Practical Application"],
-  },
-  {
-    id: "C002",
-    name: "Child Development Basics",
-    category: "Education",
-    createdDate: "2024-01-10",
-    status: "Published",
-    enrolled: 98,
-    completion: 92,
-    description: "Foundational knowledge of child development stages, behavior, and age-appropriate engagement strategies.",
-    modules: ["Module 1: Developmental Stages", "Module 2: Cognitive Growth", "Module 3: Social & Emotional Skills"],
-  },
-  {
-    id: "C003",
-    name: "Emergency Response Training",
-    category: "Safety",
-    createdDate: "2024-02-01",
-    status: "Published",
-    enrolled: 67,
-    completion: 79,
-    description: "Critical training on responding to emergencies and ensuring child safety in high-pressure situations.",
-    modules: ["Module 1: Risk Assessment", "Module 2: Response Protocols", "Module 3: Recovery & Reporting"],
-  },
-  {
-    id: "C004",
-    name: "Age-Appropriate Activities",
-    category: "Education",
-    createdDate: "2024-02-15",
-    status: "Draft",
-    enrolled: 0,
-    completion: 0,
-    description: "Curated activity ideas tailored to children of various age groups and interests.",
-    modules: ["Module 1: Infants & Toddlers", "Module 2: Preschoolers", "Module 3: School-Age"],
-  },
-];
+function mapDbCourse(c: AdminCourseWithStats): Course {
+  const mods = Array.isArray(c.modules) ? c.modules : [];
+  const completion = Math.min(100, Math.round(c.completion_avg));
+  return {
+    id: c.id,
+    name: c.name,
+    category: c.category,
+    createdDate: (c.created_at ?? "").slice(0, 10),
+    status: courseCertTabStatusFromDb(c.status),
+    enrolled: c.submissions_count,
+    completion,
+    description: c.description ?? "",
+    modules: mods.length ? mods : ["(No modules listed)"],
+  };
+}
 
 function toCourseProfile(c: Course): CourseProfile {
   return {
@@ -103,18 +82,54 @@ interface CertificationSubmission {
   timeTaken: string;
 }
 
-const initialApprovals: CertificationSubmission[] = [
-  { id: "S001", babysitterName: "Emma Martinez", courseName: "CPR & First Aid Certification", submissionDate: "2024-02-20", score: 94, status: "Pending", questionsAnswered: "50/50", correctAnswers: "47/50", timeTaken: "45 minutes" },
-  { id: "S002", babysitterName: "Lily Chen", courseName: "Child Development Basics", submissionDate: "2024-02-21", score: 88, status: "Pending", questionsAnswered: "40/40", correctAnswers: "35/40", timeTaken: "38 minutes" },
-  { id: "S003", babysitterName: "Jake Thompson", courseName: "Emergency Response Training", submissionDate: "2024-02-18", score: 96, status: "Approved", questionsAnswered: "50/50", correctAnswers: "48/50", timeTaken: "42 minutes" },
-  { id: "S004", babysitterName: "Sarah Davis", courseName: "CPR & First Aid Certification", submissionDate: "2024-02-17", score: 92, status: "Approved", questionsAnswered: "50/50", correctAnswers: "46/50", timeTaken: "47 minutes" },
-  { id: "S005", babysitterName: "Marcus Johnson", courseName: "Child Development Basics", submissionDate: "2024-02-19", score: 85, status: "Pending", questionsAnswered: "40/40", correctAnswers: "34/40", timeTaken: "40 minutes" },
-  { id: "S006", babysitterName: "Olivia Brown", courseName: "Emergency Response Training", submissionDate: "2024-02-16", score: 78, status: "Rejected", questionsAnswered: "50/50", correctAnswers: "39/50", timeTaken: "55 minutes" },
-  { id: "S007", babysitterName: "Noah Williams", courseName: "Age-Appropriate Activities", submissionDate: "2024-02-22", score: 91, status: "Pending", questionsAnswered: "30/30", correctAnswers: "27/30", timeTaken: "28 minutes" },
-  { id: "S008", babysitterName: "Sophia Patel", courseName: "CPR & First Aid Certification", submissionDate: "2024-02-15", score: 89, status: "Approved", questionsAnswered: "50/50", correctAnswers: "44/50", timeTaken: "44 minutes" },
-  { id: "S009", babysitterName: "Liam Garcia", courseName: "Child Development Basics", submissionDate: "2024-02-23", score: 82, status: "Pending", questionsAnswered: "40/40", correctAnswers: "33/40", timeTaken: "39 minutes" },
-  { id: "S010", babysitterName: "Ava Rodriguez", courseName: "Emergency Response Training", submissionDate: "2024-02-14", score: 95, status: "Approved", questionsAnswered: "50/50", correctAnswers: "48/50", timeTaken: "41 minutes" },
-];
+function joinUser(
+  u:
+    | { full_name: string | null; email: string }
+    | { full_name: string | null; email: string }[]
+    | null
+    | undefined,
+): { full_name: string | null; email: string } | null {
+  if (!u) return null;
+  if (Array.isArray(u)) return u[0] ?? null;
+  return u;
+}
+
+function joinCourse(
+  c: { name: string } | { name: string }[] | null | undefined,
+): { name: string } | null {
+  if (!c) return null;
+  if (Array.isArray(c)) return c[0] ?? null;
+  return c;
+}
+
+function mapSubRow(r: CertificationSubmissionRow): CertificationSubmission {
+  const u = joinUser(r.sitter);
+  const co = joinCourse(r.course);
+  const name = u?.full_name?.trim() || u?.email || "Unknown";
+  const courseName = co?.name ?? "Course";
+  const score = r.score != null ? Math.round(Number(r.score)) : 0;
+  const qa = r.questions_answered;
+  const ca = r.correct_answers;
+  const questionsAnswered =
+    qa != null && ca != null ? `${ca}/${qa}` : qa != null ? `—/${qa}` : "—";
+  const correctAnswers = qa != null && ca != null ? `${ca}/${qa}` : "—";
+  const mins =
+    r.time_taken_seconds != null ? Math.max(1, Math.round(r.time_taken_seconds / 60)) : null;
+  const timeTaken = mins != null ? `${mins} minutes` : "—";
+  const st: ApprovalStatus =
+    r.status === "approved" ? "Approved" : r.status === "rejected" ? "Rejected" : "Pending";
+  return {
+    id: r.id,
+    babysitterName: name,
+    courseName,
+    submissionDate: (r.submitted_at ?? "").slice(0, 10),
+    score,
+    status: st,
+    questionsAnswered,
+    correctAnswers,
+    timeTaken,
+  };
+}
 
 function toSubmissionDetail(s: CertificationSubmission): CertificationSubmissionDetail {
   return {
@@ -134,13 +149,38 @@ type Tab = "courses" | "approvals";
 
 export default function CertificationsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("courses");
-  const [courses, setCourses] = useState<Course[]>(initialCourses);
-  const [approvals, setApprovals] = useState<CertificationSubmission[]>(initialApprovals);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [approvals, setApprovals] = useState<CertificationSubmission[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<CourseProfile | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Course | null>(null);
 
   const [activeSub, setActiveSub] = useState<CertificationSubmission | null>(null);
   const [activeSubModal, setActiveSubModal] = useState<"details" | "approve" | "reject" | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [crows, subs] = await Promise.all([
+        fetchAdminCoursesWithStats(),
+        fetchCertificationSubmissionsAdmin(),
+      ]);
+      setCourses(crows.map(mapDbCourse));
+      setApprovals(subs.map(mapSubRow));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load");
+      setCourses([]);
+      setApprovals([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const openSubModal = (sub: CertificationSubmission, modal: "details" | "approve" | "reject") => {
     setActiveSub(sub);
@@ -152,19 +192,26 @@ export default function CertificationsPage() {
     setActiveSub(null);
   };
 
-  const handleDelete = (id: string) => {
-    setCourses((prev) => prev.filter((c) => c.id !== id));
+  const handleDeleteCourse = async (id: string) => {
+    try {
+      await adminDeleteCourse(id);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+    }
   };
 
-  const handleApprovalAction = (id: string, status: "Approved" | "Rejected") => {
-    setApprovals((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status } : a))
-    );
-  };
+  const pendingCount = approvals.filter((a) => a.status === "Pending").length;
+  const totalEnrolled = courses.reduce((s, c) => s + c.enrolled, 0);
+  const activeCourses = courses.filter((c) => c.status === "Published").length;
+  const withSubs = courses.filter((c) => c.enrolled > 0);
+  const avgCompletion =
+    withSubs.length > 0
+      ? Math.round(withSubs.reduce((s, c) => s + c.completion, 0) / withSubs.length)
+      : 0;
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
       <div>
         <h1 className="text-[32px] leading-[40px] font-bold text-white">
           Certifications &amp; Training Management
@@ -172,17 +219,25 @@ export default function CertificationsPage() {
         <p className="mt-1 text-[15px] text-[#94a3b8]">
           Manage courses, training materials, and certification approvals
         </p>
+        {error && (
+          <p className="mt-2 text-[13px] text-red-400" role="alert">
+            {error}
+          </p>
+        )}
+        {loading && <p className="mt-2 text-[13px] text-[#94a3b8]">Loading…</p>}
       </div>
 
-      {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SimpleStatCard label="Active Courses" value="12" valueColor="text-white" />
-        <SimpleStatCard label="Total Enrollments" value="156" valueColor="text-[#34d399]" />
-        <SimpleStatCard label="Pending Approvals" value="12" valueColor="text-[#c4b5fd]" />
-        <SimpleStatCard label="Avg Completion Rate" value="86%" valueColor="text-[#34d399]" />
+        <SimpleStatCard label="Active Courses" value={String(activeCourses)} valueColor="text-white" />
+        <SimpleStatCard label="Total Enrollments" value={String(totalEnrolled)} valueColor="text-[#34d399]" />
+        <SimpleStatCard label="Pending Approvals" value={String(pendingCount)} valueColor="text-[#c4b5fd]" />
+        <SimpleStatCard
+          label="Avg Completion Rate"
+          value={loading ? "—" : `${avgCompletion}%`}
+          valueColor="text-[#34d399]"
+        />
       </div>
 
-      {/* Tabs */}
       <div className="inline-flex items-center gap-2 bg-[#0f172a]/60 border border-white/10 rounded-full p-1.5">
         <TabButton active={activeTab === "courses"} onClick={() => setActiveTab("courses")}>
           Course Management
@@ -192,7 +247,6 @@ export default function CertificationsPage() {
         </TabButton>
       </div>
 
-      {/* Tab content */}
       {activeTab === "courses" ? (
         <section className="bg-[#1e293b]/60 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.6)]">
           <h2 className="text-[18px] leading-[26px] font-semibold text-white mb-5">
@@ -229,6 +283,7 @@ export default function CertificationsPage() {
                     <td className="py-4 pl-4">
                       <div className="flex items-center justify-end gap-1">
                         <button
+                          type="button"
                           onClick={() => setSelectedCourse(toCourseProfile(c))}
                           aria-label="View course"
                           className="p-1.5 text-[#94a3b8] hover:text-white transition-colors"
@@ -236,6 +291,7 @@ export default function CertificationsPage() {
                           <Eye className="w-[18px] h-[18px]" strokeWidth={1.75} />
                         </button>
                         <button
+                          type="button"
                           onClick={() => setDeleteTarget(c)}
                           aria-label="Delete course"
                           className="p-1.5 text-[#ef4444] hover:text-[#dc2626] transition-colors"
@@ -246,7 +302,7 @@ export default function CertificationsPage() {
                     </td>
                   </tr>
                 ))}
-                {courses.length === 0 && (
+                {courses.length === 0 && !loading && (
                   <tr>
                     <td colSpan={7} className="py-10 text-center text-[14px] text-[#94a3b8]">
                       No courses yet.
@@ -291,6 +347,7 @@ export default function CertificationsPage() {
                     <td className="py-4 pl-4">
                       <div className="flex items-center justify-end gap-1">
                         <button
+                          type="button"
                           onClick={() => openSubModal(a, "details")}
                           aria-label="View submission"
                           className="p-1.5 text-[#94a3b8] hover:text-white transition-colors"
@@ -300,6 +357,7 @@ export default function CertificationsPage() {
                         {a.status === "Pending" && (
                           <>
                             <button
+                              type="button"
                               onClick={() => openSubModal(a, "approve")}
                               aria-label="Approve"
                               className="p-1.5 text-[#34d399] hover:text-[#22c55e] transition-colors"
@@ -307,6 +365,7 @@ export default function CertificationsPage() {
                               <CheckCircle2 className="w-[18px] h-[18px]" strokeWidth={1.75} />
                             </button>
                             <button
+                              type="button"
                               onClick={() => openSubModal(a, "reject")}
                               aria-label="Reject"
                               className="p-1.5 text-[#ef4444] hover:text-[#dc2626] transition-colors"
@@ -319,7 +378,7 @@ export default function CertificationsPage() {
                     </td>
                   </tr>
                 ))}
-                {approvals.length === 0 && (
+                {approvals.length === 0 && !loading && (
                   <tr>
                     <td colSpan={6} className="py-10 text-center text-[14px] text-[#94a3b8]">
                       No certification submissions.
@@ -342,7 +401,8 @@ export default function CertificationsPage() {
         isOpen={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => {
-          if (deleteTarget) handleDelete(deleteTarget.id);
+          if (deleteTarget) void handleDeleteCourse(deleteTarget.id);
+          setDeleteTarget(null);
         }}
         courseName={deleteTarget?.name ?? ""}
         category={deleteTarget?.category ?? ""}
@@ -361,7 +421,16 @@ export default function CertificationsPage() {
         isOpen={activeSubModal === "approve" && activeSub !== null}
         onClose={closeSubModal}
         onConfirm={() => {
-          if (activeSub) handleApprovalAction(activeSub.id, "Approved");
+          if (!activeSub) return;
+          void (async () => {
+            try {
+              await approveCertificationSubmission(activeSub.id);
+              closeSubModal();
+              await load();
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "Approve failed");
+            }
+          })();
         }}
         babysitterName={activeSub?.babysitterName ?? ""}
         courseName={activeSub?.courseName ?? ""}
@@ -371,8 +440,17 @@ export default function CertificationsPage() {
       <RejectCertificationModal
         isOpen={activeSubModal === "reject" && activeSub !== null}
         onClose={closeSubModal}
-        onConfirm={() => {
-          if (activeSub) handleApprovalAction(activeSub.id, "Rejected");
+        onConfirm={(reason) => {
+          if (!activeSub) return;
+          void (async () => {
+            try {
+              await rejectCertificationSubmission(activeSub.id, reason);
+              closeSubModal();
+              await load();
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "Reject failed");
+            }
+          })();
         }}
         babysitterName={activeSub?.babysitterName ?? ""}
         courseName={activeSub?.courseName ?? ""}
@@ -414,6 +492,7 @@ function TabButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`px-6 h-[40px] rounded-full text-[14px] font-medium transition-all ${
         active
