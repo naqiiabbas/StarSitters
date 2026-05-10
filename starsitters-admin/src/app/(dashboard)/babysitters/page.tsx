@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Eye, Search, ChevronDown, ShieldOff, ShieldCheck } from "lucide-react";
 import {
   BabysitterDetailsModal,
@@ -65,7 +66,8 @@ function rowToBabysitter(r: SitterRow): Babysitter {
   };
 }
 
-export default function BabysittersPage() {
+function BabysittersPageInner() {
+  const searchParams = useSearchParams();
   const [babysitters, setBabysitters] = useState<Babysitter[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -89,6 +91,11 @@ export default function BabysittersPage() {
   useEffect(() => {
     void reload();
   }, []);
+
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q) setSearch(q);
+  }, [searchParams]);
 
   const summary = useMemo(() => {
     const total = babysitters.length;
@@ -351,5 +358,13 @@ function Badge({ variant }: { variant: BadgeVariant }) {
     >
       {variant}
     </span>
+  );
+}
+
+export default function BabysittersPage() {
+  return (
+    <Suspense fallback={<div className="text-[#94a3b8] py-16 text-center">Loading…</div>}>
+      <BabysittersPageInner />
+    </Suspense>
   );
 }

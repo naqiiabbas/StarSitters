@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import {
   LayoutGrid,
   Users,
@@ -18,10 +19,12 @@ import {
   Settings,
   LogOut,
   X,
+  Search,
 } from "lucide-react";
 
 const menuItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutGrid },
+  { name: "Search", href: "/search", icon: Search },
   { name: "Families Management", href: "/families", icon: Users },
   { name: "Babysitters Management", href: "/babysitters", icon: Smile },
   { name: "Certifications", href: "/certifications", icon: GraduationCap },
@@ -48,9 +51,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     setMounted(true);
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     onClose();
+    const supabase = createClient();
+    await supabase.auth.signOut();
     router.push("/");
+    router.refresh();
   };
 
   return (

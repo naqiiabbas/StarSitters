@@ -90,6 +90,14 @@ function adjustModulesList(existing: string[], count: number): string[] {
   return out.slice(0, Math.max(0, count));
 }
 
+/** Parse "4", "4 hours", "12.5 h" → hours number */
+function parseDurationHours(raw: string, fallback: number): number {
+  const m = String(raw).trim().match(/(\d+(\.\d+)?)/);
+  if (!m) return fallback;
+  const n = parseFloat(m[1]);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 function toViewData(c: Course): ViewCourseData {
   return {
     id: c.id,
@@ -420,7 +428,7 @@ export default function CoursesPage() {
         initialData={editTarget ? toEditData(editTarget) : null}
         onSubmit={(data) => {
           if (!editTarget) return;
-          const hours = parseFloat(data.duration) || editTarget.durationHours;
+          const hours = parseDurationHours(data.duration, editTarget.durationHours);
           const modulesList = adjustModulesList(editTarget.modulesList, data.modulesCount);
           void updateCourse(editTarget.id, {
             title: data.title,

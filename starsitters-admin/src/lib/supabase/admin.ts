@@ -604,6 +604,33 @@ export async function adminUpdateSystemConfig(configs: Record<string, unknown>) 
   if (error) throw error;
 }
 
+/** Current admin’s `admin_users` row (RLS: own membership row only). */
+export type AdminMembershipRow = {
+  id: string;
+  permissions: string[];
+  created_at: string | null;
+};
+
+export async function fetchOwnAdminMembership(): Promise<AdminMembershipRow | null> {
+  const supabase = createClient();
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return null;
+  const { data, error } = await supabase
+    .from("admin_users")
+    .select("id, permissions, created_at")
+    .eq("id", uid)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const perms = Array.isArray(data.permissions) ? (data.permissions as string[]) : [];
+  return {
+    id: data.id as string,
+    permissions: perms,
+    created_at: (data as { created_at?: string }).created_at ?? null,
+  };
+}
+
 export type AuditLogAdminRow = {
   id: string;
   created_at: string;
@@ -751,6 +778,51 @@ export async function fetchReportCertStats(): Promise<ReportCertStats> {
     most_popular_enrollments: num(row.most_popular_enrollments),
     decided_submissions: num(row.decided_submissions),
   };
+}
+
+/** Sitter ledger rows (earnings, withdrawals, adjustments) — RPC `admin_list_ledger_entries`. */
+export type AdminLedgerRow = {
+  id: string;
+  sitter_id: string;
+  sitter_name: string;
+  sitter_email: string;
+  entry_type: string;
+  amount: number;
+  reference_type: string | null;
+  reference_id: string | null;
+  balance_after: number;
+  created_at: string;
+};
+
+export async function fetchAdminLedgerEntries(limit = 200): Promise<AdminLedgerRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("admin_list_ledger_entries", { p_limit: limit });
+  if (error) throw error;
+  const rows = (data ?? []) as {
+    id: string;
+    sitter_id: string;
+    sitter_name: string;
+    sitter_email: string;
+    entry_type: string;
+    amount: number | string;
+    reference_type: string | null;
+    reference_id: string | null;
+    balance_after: number | string;
+    created_at: string;
+  }[];
+  return rows.map((r) => ({
+    id: r.id,
+    sitter_id: r.sitter_id,
+    sitter_name: r.sitter_name,
+    sitter_email: r.sitter_email,
+    entry_type: r.entry_type,
+    amount: typeof r.amount === "string" ? parseFloat(r.amount) : Number(r.amount),
+    reference_type: r.reference_type,
+    reference_id: r.reference_id,
+    balance_after:
+      typeof r.balance_after === "string" ? parseFloat(r.balance_after) : Number(r.balance_after),
+    created_at: r.created_at,
+  }));
 }
 
 // --- Courses (RLS: admin write on public.courses) ---

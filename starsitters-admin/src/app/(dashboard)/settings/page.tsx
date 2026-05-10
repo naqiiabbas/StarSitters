@@ -4,10 +4,13 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   adminUpdateSystemConfig,
   fetchAuditLogs,
+  fetchOwnAdminMembership,
   fetchSystemConfigRows,
+  type AdminMembershipRow,
   type AuditLogAdminRow,
   type SystemConfigRow,
 } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError } from "@/lib/supabase/errors";
 import {
   Settings as SettingsIcon,
@@ -52,6 +55,10 @@ export default function SettingsPage() {
   const [auditRows, setAuditRows] = useState<AuditLogAdminRow[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
+  const [adminMembership, setAdminMembership] = useState<AdminMembershipRow | null>(null);
+  const [adminDisplayName, setAdminDisplayName] = useState<string>("");
+  const [adminMembershipLoading, setAdminMembershipLoading] = useState(true);
+  const [adminMembershipError, setAdminMembershipError] = useState<string | null>(null);
 
   // Platform tab state
   const [systemNotifications, setSystemNotifications] = useState(true);
@@ -115,6 +122,49 @@ export default function SettingsPage() {
   useEffect(() => {
     setSaveOkMessage(null);
   }, [activeTab]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setAdminMembershipLoading(true);
+      setAdminMembershipError(null);
+      try {
+        const supabase = createClient();
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id;
+        if (!uid) {
+          if (!cancelled) {
+            setAdminMembership(null);
+            setAdminDisplayName("");
+          }
+          return;
+        }
+        const [mem, profile] = await Promise.all([
+          fetchOwnAdminMembership(),
+          supabase.from("users").select("full_name,email").eq("id", uid).maybeSingle(),
+        ]);
+        if (cancelled) return;
+        setAdminMembership(mem);
+        const row = profile.data;
+        const name =
+          row?.full_name?.trim() ||
+          (typeof auth.user?.user_metadata?.full_name === "string"
+            ? auth.user.user_metadata.full_name.trim()
+            : "") ||
+          row?.email ||
+          auth.user?.email ||
+          "Admin";
+        setAdminDisplayName(name);
+      } catch (e) {
+        if (!cancelled) setAdminMembershipError(formatSupabaseError(e));
+      } finally {
+        if (!cancelled) setAdminMembershipLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (activeTab !== "audit") return;
@@ -315,15 +365,32 @@ export default function SettingsPage() {
             iconColor="purple"
             icon={Users}
             title="Role-Based Access Control"
-            description="Manage admin roles and permissions"
+            description="Your admin membership (from admin_users)"
           >
             <div className="space-y-3">
-              <RoleRow
-                name="Super Admin"
-                description="Full system access"
-                permissions="All permissions enabled"
-                activeCount={1}
-              />
+              {adminMembershipLoading ? (
+                <p className="text-[14px] text-[#94a3b8]">Loading…</p>
+              ) : adminMembershipError ? (
+                <p role="alert" className="text-[14px] text-red-300">
+                  {adminMembershipError}
+                </p>
+              ) : adminMembership ? (
+                <RoleRow
+                  name={adminDisplayName || "Admin"}
+                  description="Platform administrator"
+                  permissions={
+                    adminMembership.permissions.length > 0
+                      ? adminMembership.permissions.join(", ")
+                      : "Default access (empty permissions array — full admin via membership)"
+                  }
+                  activeCount={1}
+                />
+              ) : (
+                <p className="text-[14px] text-amber-200">
+                  No admin_users row for this account. Ask a DBA to insert your user id into
+                  admin_users.
+                </p>
+              )}
             </div>
           </SectionCard>
         </div>

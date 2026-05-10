@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   adminInsertCourse,
+  type AdminCourseInsert,
   fetchAdminCoursesWithStats,
   fetchDashboardStats,
 } from "@/lib/supabase/admin";
@@ -60,6 +61,47 @@ const STEPS: { idx: StepIndex; title: string; subtitle: string }[] = [
   { idx: 5, title: "Review & Publish", subtitle: "Final review" },
 ];
 
+const LEVEL_OPTIONS = ["Beginner", "Intermediate", "Advanced"] as const;
+type CourseLevel = (typeof LEVEL_OPTIONS)[number];
+
+function parseDurationHoursValue(s: string): number {
+  const m = String(s).trim().match(/(\d+(\.\d+)?)/);
+  if (!m) return NaN;
+  return parseFloat(m[1]);
+}
+
+function buildRequirementsFromMaterials(materials: MaterialDraft[]): string | null {
+  if (materials.length === 0) return null;
+  const lines = materials.map(
+    (m) =>
+      `- [${m.type}] ${m.name} (${m.sizeMb.toFixed(2)} MB; attach in storage when available)`,
+  );
+  return `Planned training materials:\n${lines.join("\n")}`;
+}
+
+function buildLearningObjectivesFromQuiz(
+  passingScore: string,
+  questions: QuestionDraft[],
+): string {
+  const passNum = parseFloat(passingScore);
+  const passOk = Number.isFinite(passNum) ? Math.min(100, Math.max(0, Math.round(passNum))) : 80;
+  let body = `Passing score: ${passOk}%`;
+  if (questions.length === 0) {
+    body += "\n\nQuiz: (no questions added yet.)";
+    return body;
+  }
+  body += "\n\nQuiz outline:\n";
+  questions.forEach((q, qi) => {
+    body += `\n${qi + 1}. ${q.question}`;
+    q.options.forEach((opt, oi) => {
+      const letter = String.fromCharCode(65 + oi);
+      const mark = oi === q.correctIndex ? " (correct)" : "";
+      body += `\n   ${letter}. ${opt}${mark}`;
+    });
+  });
+  return body;
+}
+
 export default function CreateCoursePage() {
   const router = useRouter();
   const [step, setStep] = useState<StepIndex>(1);
@@ -96,6 +138,13 @@ export default function CreateCoursePage() {
   // Step 5 state
   const [publishMode, setPublishMode] = useState<"draft" | "publish">("publish");
   const [showToast, setShowToast] = useState(false);
+  const [level, setLevel] = useState<CourseLevel>("Beginner");
+  const [instructor, setInstructor] = useState("");
+  const [stepError, setStepError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastDescription, setToastDescription] = useState("");
+  const materialFileInputRef = useRef<HTMLInputElement>(null);
+  const pendingMaterialTypeRef = useRef<MaterialType | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,13 +187,48 @@ export default function CreateCoursePage() {
     };
   }, []);
 
+  useEffect(() => {
+    setStepError(null);
+  }, [step]);
+
   const progressPercent = (step / 5) * 100;
 
   const handleBack = () => router.push("/courses");
   const handlePrevious = () => {
     if (step > 1) setStep((step - 1) as StepIndex);
   };
+
+  const validateStepForNext = (s: StepIndex): string | null => {
+    switch (s) {
+      case 1: {
+        if (title.trim().length < 5) return "Title must be at least 5 characters.";
+        if (description.trim().length < 10)
+          return "Description should be at least 10 characters.";
+        if (!category.trim()) return "Select a category.";
+        const hrs = parseDurationHoursValue(duration);
+        if (!Number.isFinite(hrs) || hrs <= 0) return "Enter a duration greater than 0 hours.";
+        const pri = parseFloat(price);
+        if (!Number.isFinite(pri) || pri < 0) return "Enter a valid price (0 or more).";
+        return null;
+      }
+      case 2:
+        if (modules.length < 1) return "Add at least one module before continuing.";
+        return null;
+      case 3:
+      case 4:
+      default:
+        return null;
+    }
+  };
+
   const handleNext = () => {
+    setPublishError(null);
+    const err = validateStepForNext(step);
+    if (err) {
+      setStepError(err);
+      return;
+    }
+    setStepError(null);
     if (step < 5) setStep((step + 1) as StepIndex);
   };
 
@@ -162,17 +246,37 @@ export default function CreateCoursePage() {
     setModuleDescription("");
   };
 
-  const handleAddMaterial = (type: MaterialType) => {
-    const ext = type === "PDF" ? "pdf" : type === "VIDEO" ? "mp4" : "docx";
-    const count = materials.filter((m) => m.type === type).length + 1;
-    const baseName = type.toLowerCase();
+  const handleRemoveModule = (id: string) => {
+    setModules((prev) => prev.filter((m) => m.id !== id));
+  };
+
+  const openMaterialPicker = (type: MaterialType) => {
+    pendingMaterialTypeRef.current = type;
+    const inp = materialFileInputRef.current;
+    if (!inp) return;
+    inp.accept =
+      type === "PDF"
+        ? ".pdf,application/pdf"
+        : type === "VIDEO"
+          ? "video/*"
+          : ".doc,.docx,.txt,.md,.pdf,application/msword";
+    inp.click();
+  };
+
+  const handleMaterialFileChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    const file = e.target.files?.[0];
+    const type = pendingMaterialTypeRef.current;
+    e.target.value = "";
+    pendingMaterialTypeRef.current = null;
+    if (!file || !type) return;
+    const sizeMb = Math.round((file.size / (1024 * 1024)) * 100) / 100;
     setMaterials((prev) => [
       ...prev,
       {
-        id: `MAT${Date.now()}`,
-        name: `${baseName}_material_${count}.${ext}`,
+        id: `MAT-${Date.now()}`,
+        name: file.name,
         type,
-        sizeMb: Math.round((Math.random() * 5 + 1) * 100) / 100,
+        sizeMb: Math.max(sizeMb, 0.01),
       },
     ]);
   };
@@ -183,15 +287,20 @@ export default function CreateCoursePage() {
 
   const handleAddQuestion = () => {
     if (!questionText.trim()) return;
-    const filledOptions = options.filter((o) => o.trim() !== "");
-    if (filledOptions.length < 2) return;
+    const pairs = options
+      .map((o, origIndex) => ({ text: o.trim(), origIndex }))
+      .filter((p) => p.text.length > 0);
+    if (pairs.length < 2) return;
+    let newCorrect = 0;
+    const hit = pairs.findIndex((p) => p.origIndex === correctIndex);
+    newCorrect = hit >= 0 ? hit : 0;
     setQuestions((prev) => [
       ...prev,
       {
         id: `Q${Date.now()}`,
         question: questionText.trim(),
-        options: [...options],
-        correctIndex,
+        options: pairs.map((p) => p.text),
+        correctIndex: newCorrect,
       },
     ]);
     setQuestionText("");
@@ -199,46 +308,101 @@ export default function CreateCoursePage() {
     setCorrectIndex(0);
   };
 
-  const handlePublish = () => {
-    void (async () => {
-      setPublishError(null);
-      const t = title.trim();
-      if (t.length < 5) {
-        setPublishError("Course title must be at least 5 characters.");
+  const persistCourse = async (intent: "draft" | "publish") => {
+    setPublishError(null);
+    setStepError(null);
+
+    const t = title.trim();
+    if (t.length < 5) {
+      setPublishError("Course title must be at least 5 characters.");
+      return;
+    }
+    if (!category.trim()) {
+      setPublishError("Please select a category.");
+      return;
+    }
+
+    const descMin = intent === "publish" ? 20 : 10;
+    if (description.trim().length < descMin) {
+      setPublishError(
+        intent === "publish"
+          ? "Description should be at least 20 characters before publishing."
+          : "Description should be at least 10 characters to save a draft.",
+      );
+      return;
+    }
+
+    const hrs = parseDurationHoursValue(duration);
+    if (!Number.isFinite(hrs) || hrs <= 0) {
+      setPublishError("Enter a valid duration greater than 0.");
+      return;
+    }
+
+    const pri = parseFloat(price);
+    if (!Number.isFinite(pri) || pri < 0) {
+      setPublishError("Enter a valid price (0 or more).");
+      return;
+    }
+
+    if (intent === "publish") {
+      if (modules.length < 1) {
+        setPublishError("Add at least one module before publishing.");
         return;
       }
-      if (!category.trim()) {
-        setPublishError("Please select a category.");
+      if (questions.length < 1) {
+        setPublishError("Add at least one quiz question before publishing.");
         return;
       }
-      setPublishBusy(true);
-      try {
-        const modTitles =
-          modules.length > 0
-            ? modules.map((m) => (m.title.trim() ? m.title.trim() : "Module"))
-            : ["Module 1"];
-        await adminInsertCourse({
-          name: t,
-          category: category.trim(),
-          status: publishMode === "publish" ? "published" : "draft",
-          description: description.trim() || null,
-          modules: modTitles,
-          instructor: "Star Sitters",
-          duration_hours: parseFloat(duration) || 0,
-          level: "Beginner",
-          price: parseFloat(price) || 0,
-          requirements: null,
-          learning_objectives: `Target passing score: ${passingScore}%`,
-          provides_certificate: true,
-        });
-        setShowToast(true);
-        setTimeout(() => router.push("/courses"), 1200);
-      } catch (e) {
-        setPublishError(formatSupabaseError(e));
-      } finally {
-        setPublishBusy(false);
+    }
+
+    const modTitles =
+      modules.length > 0
+        ? modules.map((m, idx) => (m.title.trim() ? m.title.trim() : `Module ${idx + 1}`))
+        : ["Module 1"];
+
+    const levelDb: AdminCourseInsert["level"] =
+      level === "Intermediate" || level === "Advanced" ? level : "Beginner";
+
+    setPublishBusy(true);
+    try {
+      await adminInsertCourse({
+        name: t,
+        category: category.trim(),
+        status: intent === "publish" ? "published" : "draft",
+        description: description.trim() || null,
+        modules: modTitles,
+        instructor: instructor.trim() || "Star Sitters",
+        duration_hours: hrs,
+        level: levelDb,
+        price: pri,
+        requirements: buildRequirementsFromMaterials(materials),
+        learning_objectives: buildLearningObjectivesFromQuiz(passingScore, questions),
+        provides_certificate: true,
+      });
+      if (intent === "publish") {
+        setToastMessage("Course published successfully!");
+        setToastDescription("The course is now available for enrollment.");
+      } else {
+        setToastMessage("Draft saved successfully!");
+        setToastDescription(
+          "You can finish editing or publish the course from Course Management.",
+        );
       }
-    })();
+      setShowToast(true);
+      setTimeout(() => router.push("/courses"), 1200);
+    } catch (e) {
+      setPublishError(formatSupabaseError(e));
+    } finally {
+      setPublishBusy(false);
+    }
+  };
+
+  const handleSaveDraft = () => {
+    void persistCourse("draft");
+  };
+
+  const handleFinalizeStep5 = () => {
+    void persistCourse(publishMode === "publish" ? "publish" : "draft");
   };
 
   return (
@@ -261,6 +425,11 @@ export default function CreateCoursePage() {
         {publishError && (
           <p className="mt-2 text-[13px] text-red-400" role="alert">
             {publishError}
+          </p>
+        )}
+        {stepError && (
+          <p className="mt-2 text-[13px] text-amber-400" role="status">
+            {stepError}
           </p>
         )}
       </div>
@@ -355,11 +524,21 @@ export default function CreateCoursePage() {
 
       {/* Step content card */}
       <section className="bg-[#1e293b]/60 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.6)]">
+        <input
+          ref={materialFileInputRef}
+          type="file"
+          className="hidden"
+          aria-hidden
+          onChange={handleMaterialFileChange}
+        />
+
         {step === 1 && (
           <Step1
             title={title}
             description={description}
             category={category}
+            level={level}
+            instructor={instructor}
             duration={duration}
             price={price}
             passingScore={passingScore}
@@ -367,6 +546,8 @@ export default function CreateCoursePage() {
               title: setTitle,
               description: setDescription,
               category: setCategory,
+              level: setLevel,
+              instructor: setInstructor,
               duration: setDuration,
               price: setPrice,
               passingScore: setPassingScore,
@@ -382,13 +563,14 @@ export default function CreateCoursePage() {
             onModuleTitle={setModuleTitle}
             onModuleDescription={setModuleDescription}
             onAdd={handleAddModule}
+            onRemoveModule={handleRemoveModule}
           />
         )}
 
         {step === 3 && (
           <Step3
             materials={materials}
-            onAdd={handleAddMaterial}
+            onPickMaterial={openMaterialPicker}
             onRemove={handleRemoveMaterial}
           />
         )}
@@ -414,7 +596,10 @@ export default function CreateCoursePage() {
               title: title || "New Course",
               description: description || "Enter course detail",
               category: category || "Education",
+              level,
+              instructor: instructor.trim() || "Star Sitters",
               duration,
+              price,
               passingScore,
               modules,
               materials,
@@ -438,8 +623,10 @@ export default function CreateCoursePage() {
 
           <div className="flex flex-col sm:flex-row gap-3">
             <button
-              onClick={handleBack}
-              className="inline-flex items-center justify-center gap-2 h-[44px] px-5 bg-transparent border border-white/15 text-white text-[14px] font-medium rounded-[10px] hover:bg-white/5 transition-all"
+              type="button"
+              disabled={publishBusy}
+              onClick={handleSaveDraft}
+              className="inline-flex items-center justify-center gap-2 h-[44px] px-5 bg-transparent border border-white/15 text-white text-[14px] font-medium rounded-[10px] hover:bg-white/5 transition-all disabled:opacity-50"
             >
               <Save className="w-4 h-4" strokeWidth={1.75} />
               Save Draft
@@ -447,6 +634,7 @@ export default function CreateCoursePage() {
 
             {step < 5 ? (
               <button
+                type="button"
                 onClick={handleNext}
                 className="inline-flex items-center justify-center gap-2 h-[44px] px-5 bg-[#b8e0f0] hover:bg-[#c8e8f5] text-[#0a0f24] text-[14px] font-semibold rounded-[10px] transition-all"
               >
@@ -457,7 +645,7 @@ export default function CreateCoursePage() {
               <button
                 type="button"
                 disabled={publishBusy}
-                onClick={handlePublish}
+                onClick={handleFinalizeStep5}
                 className="inline-flex items-center justify-center gap-2 h-[44px] px-5 bg-[#22c55e] hover:bg-[#16a34a] disabled:opacity-50 text-white text-[14px] font-semibold rounded-[10px] transition-all"
               >
                 <Check className="w-4 h-4" strokeWidth={2.5} />
@@ -470,8 +658,8 @@ export default function CreateCoursePage() {
 
       <Toast
         show={showToast}
-        message="Course published successfully!"
-        description="The course is now available for enrollment."
+        message={toastMessage || "Saved."}
+        description={toastDescription}
         onClose={() => setShowToast(false)}
         duration={1800}
       />
@@ -513,6 +701,8 @@ function Step1({
   title,
   description,
   category,
+  level,
+  instructor,
   duration,
   price,
   passingScore,
@@ -521,6 +711,8 @@ function Step1({
   title: string;
   description: string;
   category: string;
+  level: CourseLevel;
+  instructor: string;
   duration: string;
   price: string;
   passingScore: string;
@@ -528,6 +720,8 @@ function Step1({
     title: (v: string) => void;
     description: (v: string) => void;
     category: (v: string) => void;
+    level: (v: CourseLevel) => void;
+    instructor: (v: string) => void;
     duration: (v: string) => void;
     price: (v: string) => void;
     passingScore: (v: string) => void;
@@ -585,6 +779,32 @@ function Step1({
           </div>
         </FieldLabel>
 
+        <FieldLabel label="Level">
+          <div className="relative">
+            <select
+              value={level}
+              onChange={(e) => onChange.level(e.target.value as CourseLevel)}
+              className={`${inputClass} appearance-none pr-10`}
+            >
+              {LEVEL_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748b] pointer-events-none" />
+          </div>
+        </FieldLabel>
+
+        <FieldLabel label="Instructor (optional)">
+          <input
+            value={instructor}
+            onChange={(e) => onChange.instructor(e.target.value)}
+            placeholder="Defaults to Star Sitters if empty"
+            className={inputClass}
+          />
+        </FieldLabel>
+
         <FieldLabel label="Duration (hours)" required>
           <input
             type="number"
@@ -635,6 +855,7 @@ function Step2({
   onModuleTitle,
   onModuleDescription,
   onAdd,
+  onRemoveModule,
 }: {
   modules: ModuleDraft[];
   moduleTitle: string;
@@ -642,6 +863,7 @@ function Step2({
   onModuleTitle: (v: string) => void;
   onModuleDescription: (v: string) => void;
   onAdd: () => void;
+  onRemoveModule: (id: string) => void;
 }) {
   return (
     <div>
@@ -702,16 +924,26 @@ function Step2({
           {modules.map((m, idx) => (
             <div
               key={m.id}
-              className="bg-[#0f172a]/60 border border-white/10 rounded-[12px] px-5 py-4"
+              className="bg-[#0f172a]/60 border border-white/10 rounded-[12px] px-5 py-4 flex gap-3 items-start"
             >
-              <p className="text-[14px] font-semibold text-white">
-                Module {idx + 1}: {m.title}
-              </p>
-              {m.description && (
-                <p className="mt-1 text-[13px] text-[#94a3b8]">
-                  {m.description}
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-semibold text-white">
+                  Module {idx + 1}: {m.title}
                 </p>
-              )}
+                {m.description && (
+                  <p className="mt-1 text-[13px] text-[#94a3b8]">
+                    {m.description}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => onRemoveModule(m.id)}
+                aria-label={`Remove module ${idx + 1}`}
+                className="p-1.5 text-[#ef4444] hover:text-[#dc2626] transition-colors flex-shrink-0"
+              >
+                <X className="w-4 h-4" strokeWidth={2} />
+              </button>
             </div>
           ))}
         </div>
@@ -724,11 +956,11 @@ function Step2({
 
 function Step3({
   materials,
-  onAdd,
+  onPickMaterial,
   onRemove,
 }: {
   materials: MaterialDraft[];
-  onAdd: (type: MaterialType) => void;
+  onPickMaterial: (type: MaterialType) => void;
   onRemove: (id: string) => void;
 }) {
   return (
@@ -745,19 +977,19 @@ function Step3({
           icon={FileText}
           title="Upload PDF"
           subtitle="Documents & Guides"
-          onClick={() => onAdd("PDF")}
+          onClick={() => onPickMaterial("PDF")}
         />
         <UploadCard
           icon={Video}
           title="Upload Video"
           subtitle="Training Videos"
-          onClick={() => onAdd("VIDEO")}
+          onClick={() => onPickMaterial("VIDEO")}
         />
         <UploadCard
           icon={BookOpenCheck}
           title="Upload Document"
           subtitle="Study Materials"
-          onClick={() => onAdd("DOCUMENT")}
+          onClick={() => onPickMaterial("DOCUMENT")}
         />
       </div>
 
@@ -999,7 +1231,10 @@ interface ReviewData {
   title: string;
   description: string;
   category: string;
+  level: CourseLevel;
+  instructor: string;
   duration: string;
+  price: string;
   passingScore: string;
   modules: ModuleDraft[];
   materials: MaterialDraft[];
@@ -1029,7 +1264,10 @@ function Step5({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
           <ReviewField label="Course Title" value={data.title} />
           <ReviewField label="Category" value={data.category} />
+          <ReviewField label="Level" value={data.level} />
+          <ReviewField label="Instructor" value={data.instructor} />
           <ReviewField label="Duration" value={`${data.duration} hours`} />
+          <ReviewField label="Price" value={`$${data.price}`} />
           <ReviewField label="Passing Score" value={`${data.passingScore}%`} />
         </div>
         <div className="mt-4">

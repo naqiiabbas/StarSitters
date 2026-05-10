@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Search,
   Filter,
@@ -119,7 +120,8 @@ const STATUS_TO_DB: Record<JobStatus | "all", string> = {
   Cancelled: "cancelled",
 };
 
-export default function JobsMonitoringPage() {
+function JobsMonitoringPageInner() {
+  const searchParams = useSearchParams();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -131,6 +133,14 @@ export default function JobsMonitoringPage() {
 
   const search = (tableSearch || topSearch).toLowerCase();
   const statusFilter = tableFilter !== "all" ? tableFilter : topFilter;
+
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q) {
+      setTopSearch(q);
+      setTableSearch(q);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -430,5 +440,13 @@ function StatusBadge({ status }: { status: JobStatus }) {
     <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-[#475569]/40 border border-[#475569]/50 text-[#cbd5e1] text-[12px] font-medium">
       Open
     </span>
+  );
+}
+
+export default function JobsMonitoringPage() {
+  return (
+    <Suspense fallback={<div className="text-[#94a3b8] py-16 text-center">Loading…</div>}>
+      <JobsMonitoringPageInner />
+    </Suspense>
   );
 }
