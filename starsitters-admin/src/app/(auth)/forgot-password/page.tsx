@@ -4,19 +4,36 @@ import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, Mail, CheckCircle2, Loader2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const sendReset = async () => {
+    setErrorMessage(null);
+    setIsLoading(true);
+    try {
+      const supabase = createClient();
+      const redirectTo = `${window.location.origin}/reset-password`;
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo,
+      });
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
+      setIsSubmitted(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      setIsSubmitted(true);
-    }, 1500);
+    void sendReset();
   };
 
   return (
@@ -89,6 +106,14 @@ export default function ForgotPasswordPage() {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-6">
+                {errorMessage ? (
+                  <p
+                    role="alert"
+                    className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-200"
+                  >
+                    {errorMessage}
+                  </p>
+                ) : null}
                 <div className="space-y-2">
                   <label
                     htmlFor="email"
@@ -147,17 +172,18 @@ export default function ForgotPasswordPage() {
 
               <button
                 type="button"
-                onClick={() => {
-                  setIsSubmitted(false);
-                  setIsLoading(true);
-                  setTimeout(() => {
-                    setIsLoading(false);
-                    setIsSubmitted(true);
-                  }, 1000);
-                }}
-                className="w-full mt-8 h-[48px] bg-[#0f172a]/70 border border-[#334155]/80 text-white text-[15px] font-medium rounded-[12px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_1px_2px_rgba(0,0,0,0.2)] hover:bg-[#0f172a]/90 transition-all"
+                disabled={isLoading}
+                onClick={() => void sendReset()}
+                className="w-full mt-8 h-[48px] bg-[#0f172a]/70 border border-[#334155]/80 text-white text-[15px] font-medium rounded-[12px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_1px_2px_rgba(0,0,0,0.2)] hover:bg-[#0f172a]/90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Resend Email
+                {isLoading ? (
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Sending…
+                  </span>
+                ) : (
+                  "Resend Email"
+                )}
               </button>
 
               <Link

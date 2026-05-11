@@ -1,36 +1,103 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+
+type LinkState = "checking" | "ready" | "invalid";
+
+function hasRecoveryUrlSignal(): boolean {
+  if (typeof window === "undefined") return false;
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  if (hash.get("type") === "recovery") return true;
+  if (new URLSearchParams(window.location.search).has("code")) return true;
+  return false;
+}
 
 export default function ResetPasswordPage() {
+  const router = useRouter();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [linkState, setLinkState] = useState<LinkState>("checking");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const canSubmit =
     newPassword.length >= 8 &&
     newPassword === confirmPassword &&
     confirmPassword !== "";
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const supabase = createClient();
+    let settled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const ready = () => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      setLinkState("ready");
+    };
+
+    const invalid = () => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      setLinkState("invalid");
+    };
+
+    const maxWaitMs = hasRecoveryUrlSignal() ? 12_000 : 600;
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") ready();
+    });
+
+    void supabase.auth.getSession().then(({ data }) => {
+      if (data.session) ready();
+    });
+
+    timeoutId = setTimeout(() => {
+      if (settled) return;
+      void supabase.auth.getSession().then(({ data }) => {
+        if (settled) return;
+        if (data.session) ready();
+        else invalid();
+      });
+    }, maxWaitMs);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit || linkState !== "ready") return;
+    setErrorMessage(null);
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
       setIsSuccess(true);
-    }, 1500);
+      router.refresh();
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <main className="relative min-h-screen flex flex-col items-center justify-center px-6 py-12 antialiased overflow-hidden">
-      {/* Background image */}
       <div className="absolute inset-0 -z-10">
         <Image
           src="/login-bg.png"
@@ -49,9 +116,7 @@ export default function ResetPasswordPage() {
         />
       </div>
 
-      {/* Centered column */}
       <div className="w-full max-w-[480px] flex flex-col items-center">
-        {/* Logo */}
         <div className="relative w-[88px] h-[88px] mb-6 rounded-full overflow-hidden">
           <Image
             src="/star-sitters-logo.png"
@@ -63,33 +128,52 @@ export default function ResetPasswordPage() {
           />
         </div>
 
-        {!isSuccess && (
-          <div className="text-center mb-8">
-            <h1 className="text-[28px] leading-[36px] font-bold text-white">
-              Set New Password
-            </h1>
-            <p className="mt-2 text-[15px] leading-[24px] text-[#94a3b8]">
-              Choose a strong password to secure your account
-            </p>
-          </div>
-        )}
-
-        {/* Card */}
         <div className="w-full bg-[#1e293b]/60 backdrop-blur-md border border-[#334155]/60 rounded-2xl px-8 py-10 sm:px-10 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.6)]">
-          {!isSuccess ? (
+          {linkState === "checking" ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
+              <Loader2 className="w-10 h-10 animate-spin text-[#b8e0f0]" />
+              <p className="text-[15px] text-[#94a3b8]">Verifying reset link…</p>
+            </div>
+          ) : linkState === "invalid" ? (
+            <div className="text-center py-4">
+              <h2 className="text-[20px] font-semibold text-white mb-3">Link invalid or expired</h2>
+              <p className="text-[14px] text-[#94a3b8] mb-6">
+                Open the link from your latest reset email, or request a new one.
+              </p>
+              <Link
+                href="/forgot-password"
+                className="inline-flex w-full h-[48px] items-center justify-center bg-[#b8e0f0] hover:bg-[#c8e8f5] text-[#0a0f24] text-[15px] font-semibold rounded-[10px] transition-colors"
+              >
+                Request new link
+              </Link>
+              <Link
+                href="/"
+                className="mt-4 inline-block text-[15px] text-[#b8e0f0] hover:text-[#c8e8f5] font-medium"
+              >
+                Back to Sign In
+              </Link>
+            </div>
+          ) : !isSuccess ? (
             <>
               <div className="text-center mb-8">
                 <h2 className="text-[20px] leading-[28px] font-semibold text-white">
                   Create New Password
                 </h2>
                 <p className="mt-2 text-[14px] leading-[22px] text-[#94a3b8]">
-                  Your new password must be different from previously used
-                  passwords
+                  Your new password must be at least 8 characters
                 </p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* New Password */}
+              <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
+                {errorMessage ? (
+                  <p
+                    role="alert"
+                    className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-200"
+                  >
+                    {errorMessage}
+                  </p>
+                ) : null}
+
                 <div className="space-y-2">
                   <label
                     htmlFor="new-password"
@@ -101,9 +185,7 @@ export default function ResetPasswordPage() {
                     <button
                       type="button"
                       onClick={() => setShowNewPassword(!showNewPassword)}
-                      aria-label={
-                        showNewPassword ? "Hide password" : "Show password"
-                      }
+                      aria-label={showNewPassword ? "Hide password" : "Show password"}
                       className="absolute left-3 top-1/2 -translate-y-1/2 p-1.5 text-[#94a3b8] hover:text-white transition-colors"
                     >
                       {showNewPassword ? (
@@ -116,6 +198,7 @@ export default function ResetPasswordPage() {
                       id="new-password"
                       required
                       type={showNewPassword ? "text" : "password"}
+                      autoComplete="new-password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="Enter new password"
@@ -124,7 +207,6 @@ export default function ResetPasswordPage() {
                   </div>
                 </div>
 
-                {/* Confirm New Password */}
                 <div className="space-y-2">
                   <label
                     htmlFor="confirm-password"
@@ -135,12 +217,8 @@ export default function ResetPasswordPage() {
                   <div className="relative">
                     <button
                       type="button"
-                      onClick={() =>
-                        setShowConfirmPassword(!showConfirmPassword)
-                      }
-                      aria-label={
-                        showConfirmPassword ? "Hide password" : "Show password"
-                      }
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
                       className="absolute left-3 top-1/2 -translate-y-1/2 p-1.5 text-[#94a3b8] hover:text-white transition-colors"
                     >
                       {showConfirmPassword ? (
@@ -153,6 +231,7 @@ export default function ResetPasswordPage() {
                       id="confirm-password"
                       required
                       type={showConfirmPassword ? "text" : "password"}
+                      autoComplete="new-password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Confirm new password"
@@ -176,22 +255,15 @@ export default function ResetPasswordPage() {
             </>
           ) : (
             <div className="text-center">
-              {/* Green checkmark badge */}
               <div className="flex justify-center mb-5">
                 <div className="w-16 h-16 rounded-full bg-[#34d399]/15 flex items-center justify-center">
-                  <CheckCircle2
-                    className="w-9 h-9 text-[#34d399]"
-                    strokeWidth={1.5}
-                  />
+                  <CheckCircle2 className="w-9 h-9 text-[#34d399]" strokeWidth={1.5} />
                 </div>
               </div>
 
-              <h2 className="text-[20px] leading-[28px] font-semibold text-white">
-                Password Reset!
-              </h2>
+              <h2 className="text-[20px] leading-[28px] font-semibold text-white">Password Reset!</h2>
               <p className="mt-3 text-[14px] leading-[22px] text-[#94a3b8]">
-                Your password has been successfully reset. You can now sign in
-                with your new password.
+                Your password has been successfully reset. You can now sign in with your new password.
               </p>
 
               <Link
@@ -204,8 +276,7 @@ export default function ResetPasswordPage() {
           )}
         </div>
 
-        {/* Footer link — only on form state */}
-        {!isSuccess && (
+        {!isSuccess && linkState === "ready" && (
           <div className="mt-6 text-center text-[14px] leading-[22px]">
             <p className="text-[#94a3b8]">Remember your password?</p>
             <Link
