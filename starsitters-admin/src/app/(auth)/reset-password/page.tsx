@@ -119,7 +119,7 @@ export default function ResetPasswordPage() {
       <div className="w-full max-w-[480px] flex flex-col items-center">
         <div className="relative w-[88px] h-[88px] mb-6 rounded-full overflow-hidden">
           <Image
-            src="/star-sitters-logo.png"
+            src="/images/star-sitters-logo.jpeg"
             alt="Star Sitters"
             fill
             sizes="88px"

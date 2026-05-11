@@ -75,7 +75,7 @@ export default function ForgotPasswordPage() {
         {/* Logo */}
         <div className="relative w-[88px] h-[88px] mb-8 rounded-full overflow-hidden">
           <Image
-            src="/star-sitters-logo.png"
+            src="/images/star-sitters-logo.jpeg"
             alt="Star Sitters"
             fill
             sizes="88px"

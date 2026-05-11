@@ -61,7 +61,7 @@ export default function LoginPage() {
       <div className="flex flex-col items-center text-center mb-8">
         <div className="relative w-[88px] h-[88px] mb-6 rounded-full overflow-hidden">
           <Image
-            src="/star-sitters-logo.png"
+            src="/images/star-sitters-logo.jpeg"
             alt="Star Sitters"
             fill
             sizes="88px"
