@@ -273,6 +273,15 @@ function BabysittersPageInner() {
                         >
                           <ShieldCheck className="w-[18px] h-[18px]" strokeWidth={1.75} />
                         </button>
+                      ) : b.accountStatus === "Pending" ? (
+                        <button
+                          onClick={() => void handleUnsuspend(b.id)}
+                          aria-label="Activate account"
+                          title="Activates the sitter account (same as restore after suspension)."
+                          className="p-1.5 text-[#34d399] hover:text-[#22c55e] transition-colors"
+                        >
+                          <ShieldCheck className="w-[18px] h-[18px]" strokeWidth={1.75} />
+                        </button>
                       ) : null}
                     </div>
                   </td>
