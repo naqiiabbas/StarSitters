@@ -71,7 +71,7 @@ export function UserProfileModal({ isOpen, onClose, userData }: UserProfileModal
                 <Phone className="w-[20px] h-[20px] text-[#A2F301]" />
                 <div>
                   <p className="text-[#999999] text-[12px] leading-[16px] mb-0.5">Phone</p>
-                  <p className="text-white text-[14px] font-medium leading-[20px]">{userData.phone || "+1 555-0101"}</p>
+                  <p className="text-white text-[14px] font-medium leading-[20px]">{userData.phone || "—"}</p>
                 </div>
               </div>
 
@@ -79,7 +79,7 @@ export function UserProfileModal({ isOpen, onClose, userData }: UserProfileModal
                 <MapPin className="w-[20px] h-[20px] text-[#A2F301]" />
                 <div>
                   <p className="text-[#999999] text-[12px] leading-[16px] mb-0.5">Location</p>
-                  <p className="text-white text-[14px] font-medium leading-[20px]">{userData.location || "New York, NY"}</p>
+                  <p className="text-white text-[14px] font-medium leading-[20px]">{userData.location || "—"}</p>
                 </div>
               </div>
             </div>
@@ -90,13 +90,13 @@ export function UserProfileModal({ isOpen, onClose, userData }: UserProfileModal
                 <Calendar className="w-[20px] h-[20px] text-[#A2F301]" />
                 <div>
                   <p className="text-[#999999] text-[12px] leading-[16px] mb-0.5">Joined</p>
-                  <p className="text-white text-[14px] font-medium leading-[20px]">{userData.joinedDate || "2024-01-15"}</p>
+                  <p className="text-white text-[14px] font-medium leading-[20px]">{userData.joinedDate || "—"}</p>
                 </div>
               </div>
 
               <div className="pt-2">
                 <p className="text-[#999999] text-[12px] leading-[16px] mb-1">Total Bookings</p>
-                <p className="text-[#A2F301] text-[24px] font-bold leading-[32px]">{userData.totalBookings || "24"}</p>
+                <p className="text-[#A2F301] text-[24px] font-bold leading-[32px]">{userData.totalBookings ?? "—"}</p>
               </div>
             </div>
           </div>

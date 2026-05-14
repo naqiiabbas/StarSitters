@@ -180,7 +180,7 @@ export default function LoginPage() {
 
       {/* Footer */}
       <footer className="mt-10 text-center text-[#94a3b8] text-[13px] leading-[20px]">
-        <p>© 2024 Teen Babysitting Marketplace</p>
+        <p>© {new Date().getFullYear()} StarSitters</p>
         <p className="mt-1">Secure Admin Access Only</p>
       </footer>
     </main>
