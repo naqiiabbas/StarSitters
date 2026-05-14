@@ -20,20 +20,10 @@ interface ContractHistoryModalProps {
 export function ContractHistoryModal({ isOpen, onClose, contract }: ContractHistoryModalProps) {
   if (!isOpen || !contract) return null;
 
-  // --- Signature Audit Logic ---
-  // BACKEND DEVELOPER: This array should ideally be fetched from your 'signatures' or 'audit_logs' table.
-  // Expected fields per entry: { name, role, isSigned, timestamp, ipAddress }
+  const isSigned = contract.status === "signed";
   const signatures = [
-    {
-      name: contract.organizer,
-      role: "Organizer",
-      isSigned: true, // Assuming organizer always signs first in this mock
-    },
-    {
-      name: contract.musician,
-      role: "Musician",
-      isSigned: contract.status === "signed",
-    }
+    { name: contract.organizer, role: "Family", isSigned: true },
+    { name: contract.musician, role: "Babysitter", isSigned },
   ];
 
   return (
