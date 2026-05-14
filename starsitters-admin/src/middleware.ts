@@ -37,7 +37,8 @@ export async function middleware(request: NextRequest) {
   const isAuthPage =
     path === "/" ||
     path.startsWith("/forgot-password") ||
-    path.startsWith("/reset-password");
+    path.startsWith("/reset-password") ||
+    path.startsWith("/consent");
 
   if (!user && !isAuthPage) {
     return NextResponse.redirect(new URL("/", request.url));
